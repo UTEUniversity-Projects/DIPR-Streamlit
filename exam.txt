@@ -1,0 +1,54 @@
+Tôi đang làm dự án trong môn Xử lý ảnh số, hãy tổ chức project (ngôn ngữ python) và hướng dẫn tôi để thực hiện các yêu cầu sau:
+1. Nhận dạng khuôn mặt, tối đa 5 người. Trong một khung hình phải có nhiều người và có gắn tên mỗi người. Chỉ được dùng 2 model .onnx vì đây là phương pháp nhận dạng khuôn mặt tốt nhất hiện nay. Phải có code để chụp ảnh từ webcam, mỗi người chụp đủ 100 ảnh. 
+2. Nhận dạng 5 loại trái cây dùng Yolov8, dùng Google Colab để train, phải thêm vào dataset trái cây. Phải có hướng dẫn dùng Google Colab.
+3. Xử lý ảnh số các nội dung chương 3, chương 4 và chương 9 (xem 3 file được đính kèm)
+
+Chú ý:
+1. Bài làm phải được làm thành giao diện sử dụng Streamlit
+2. Code phải đầy đủ, chi tiết, trình bày theo từng file một
+3. Không trình bày lại code trong 3 file: chapter3.py, chapter4.py, chapter9.py (vì đã có rồi)
+
+Cấu trúc project gợi ý:
+project/
+├── app.py                  # Main Streamlit application
+├── requirements.txt        # Dependencies
+├── models/
+│   ├── face_detection_yunet_2023mar.onnx      # ONNX model phát hiện khuôn mặt
+│   ├── face_recognition_sface_2021dec.onnx    # ONNX model nhận dạng khuôn mặt
+│   └── fruit_detection.pt                    # YOLOv8 trained model for fruits
+│   └── kitti_3d_detection.pt
+├── data/
+│   ├── faces/           # Thư mục chứa ảnh mẫu từng người (để build database)
+│   │   └── {PersonName}/
+│   │       ├── 0001.jpg
+│   │       ├── ...
+│   └── fruits/          # Dataset trái cây theo format YOLOv8
+│   │   ├── images/
+│   │   └── labels/
+│   └── kitti/              # Thêm dataset KITTI
+│       ├── raw/           # Dữ liệu thô từ KITTI
+│       └── processed/     # Dữ liệu đã xử lý
+├── utils/
+│   ├── face_utils.py        # Hàm load model, phát hiện và nhận diện khuôn mặt
+│   ├── fruit_detection.py   # Hàm load YOLOv8 và dự đoán trái cây
+│   ├── image_processing.py  # Tích hợp các hàm xử lý ảnh Chương 3,4,9
+│   └── chapter_utils.py     # Wrapper / mapping các chức năng của từng chương
+│   └── kitti_detection.py
+├── chapters/
+│   ├── chapter3.py
+│   ├── chapter4.py
+│   ├── chapter9.py
+├── modules/
+│   ├── __init__.py
+│   ├── face_recognition.py   # Page 1: Face Recognition
+│   ├── fruit_detection.py    # Page 2: Fruit Detection
+│   ├── image_processing.py   # Page 3: Image Processing
+│   └── face_registration.py  # Page 4: Face Registration
+│   └── kitti_3d_detection.py
+├── scripts/
+│   ├── register_faces.py    # Script tạo database embedding từ ảnh mẫu
+│   └── train_yolov8.py      # Script huấn luyện YOLOv8 trên Google Colab
+│   └── train_yolov8_lite.py
+│   ├── train_kitti_3d.py   # Thêm script training
+│   └── download_kitti.py   # Script tải KITTI dataset
+└── README.md

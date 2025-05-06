@@ -1,0 +1,93 @@
+/* Dark theme styling */
+.stApp {
+    background-color: #1E1E1E;
+}
+
+/* Simple header styling */
+.simple-header {
+    color: white;
+    font-size: 36px;
+    font-weight: bold;
+    margin-bottom: 0;
+    padding: 20px 0 10px 0;
+}
+
+.header-divider {
+    border-bottom: 2px solid #444;
+    margin-bottom: 30px;
+    padding-bottom: 10px;
+}
+
+/* Sidebar styling */
+.sidebar .sidebar-content {
+    background-color: #2B2B2B;
+}
+
+.sidebar-logo {
+    width: 180px;
+    height: 180px;
+    margin: 5px auto 5px auto;
+    display: block;
+}
+
+.main .block-container {
+    padding-top: 2rem;
+}
+
+/* Make selectbox text visible on dark background */
+.stSelectbox label {
+    color: white !important;
+}
+
+.stSelectbox > div > div {
+    background-color: #3b3b3b;
+    color: white;
+}
+
+/* Footer styling */
+.footer {
+    text-align: center;
+    color: white;
+    margin-top: 50px;
+    padding: 20px 0;
+    border-top: 1px solid #444;
+}
+
+/* Fix dark mode compatibility issues */
+.stMarkdown {
+    color: white;
+}
+
+/* Make radio buttons visible on dark background */
+.stRadio label {
+    color: white !important;
+}
+
+.stRadio > label > div[data-testid="stMarkdownContainer"] {
+    color: white;
+}
+
+/* Make file uploader text visible */
+.stFileUploader > label {
+    color: white !important;
+}
+
+.stFileUploader div[role="button"] {
+    color: white;
+    background-color: #3b3b3b;
+}
+
+/* Make text inputs visible */
+.stTextInput > label {
+    color: white !important;
+}
+
+.stTextInput > div > div > input {
+    background-color: #3b3b3b;
+    color: white;
+}
+
+/* Make sliders visible */
+.stSlider label {
+    color: white !important;
+}

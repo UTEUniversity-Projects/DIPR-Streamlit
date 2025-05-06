@@ -1,0 +1,14 @@
+python scripts/register_faces.py --mode capture --person_name "le_hong_phuc"
+python scripts/register_faces.py --mode build
+
+
+python scripts/download_kitti.py --data_dir data/kitti
+python scripts/train_kitti_3d.py --data_dir data/kitti --epochs 50 --batch_size 4
+
+
+!pip install roboflow
+from roboflow import Roboflow
+rf = Roboflow(api_key="u8iCAFpURAQXlILez6iz")
+project = rf.workspace("erovoutikaworkspace").project("fruits-24xta")
+version = project.version(1)
+dataset = version.download("yolov8")

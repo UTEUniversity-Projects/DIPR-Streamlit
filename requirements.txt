@@ -1,0 +1,20 @@
+numpy>=1.21.0
+opencv-python>=4.5.5
+streamlit>=1.18.0
+ultralytics>=8.0.0
+matplotlib>=3.5.0
+scikit-learn>=1.0.0
+pillow>=9.0.0
+scipy>=1.7.0
+onnxruntime>=1.10.0
+pyyaml>=6.0.0
+tqdm>=4.62.0
+# KITTI 3D dependencies
+torch>=2.0.0
+torchvision>=0.15.0
+open3d>=0.17.0
+pyquaternion>=0.9.0
+mayavi>=4.8.1
+plotly>=5.14.0
+transformations>=2023.2.4
+argparse>=1.4.0
