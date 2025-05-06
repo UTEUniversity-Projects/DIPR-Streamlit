@@ -49,6 +49,6 @@ project/
 │   ├── register_faces.py    # Script tạo database embedding từ ảnh mẫu
 │   └── train_yolov8.py      # Script huấn luyện YOLOv8 trên Google Colab
 │   └── train_yolov8_lite.py
-│   ├── train_kitti_3d.py   # Thêm script training
+│   ├── train_pointpillars.py   # Thêm script training
 │   └── download_kitti.py   # Script tải KITTI dataset
 └── README.md
