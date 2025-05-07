@@ -179,8 +179,8 @@ elif mode.startswith("🚗"):
 # Footer
 st.markdown("""
 <div class="footer">
-    <p>Ứng dụng Xử lý Ảnh Số - Môn Xử lý Ảnh Số</p>
-    <p>Made with Streamlit</p>
+    <p>KHOA CÔNG NGHỆ THÔNG TIN - HỌC PHẦN XỬ LÝ ẢNH SỐ</p>
+    <p>Sinh viên Lê Hồng Phúc - 22110399</p>
 </div>
 """, unsafe_allow_html=True)
 
