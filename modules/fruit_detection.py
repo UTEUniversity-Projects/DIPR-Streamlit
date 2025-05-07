@@ -19,7 +19,7 @@ def show():
         3. Khởi động lại ứng dụng
         """)
     else:
-        uploaded_file = st.file_uploader("Chọn ảnh chứa trái cây", type=["jpg", "jpeg", "png"])
+        uploaded_file = st.file_uploader("Chọn ảnh chứa trái cây", type=["jpg", "jpeg", "png","webp"])
         
         if uploaded_file is not None:
             file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
