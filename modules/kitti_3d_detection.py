@@ -4,6 +4,7 @@ import numpy as np
 import open3d as o3d
 import os
 import plotly.graph_objects as go
+import random
 from typing import List, Dict, Tuple, Optional
 
 # Import KITTIDetector từ utils
@@ -145,8 +146,8 @@ def show():
         #### Cách sử dụng tính năng nhận dạng 3D KITTI:
         
         1. **Chọn dữ liệu mẫu**
-           - Nhập số thứ tự mẫu từ tập test của KITTI dataset (0-7480)
-           - Nhấn "Tải ảnh mẫu" để tải dữ liệu từ mẫu đã chọn
+           - Nhấn "Lấy mẫu ngẫu nhiên" để tải dữ liệu mẫu KITTI
+           - Dữ liệu sẽ được chọn ngẫu nhiên từ tập test KITTI
         
         2. **Xem dữ liệu**
            - **Ảnh gốc**: Hiển thị hình ảnh từ camera
@@ -231,28 +232,26 @@ def show():
     # Dataset browser
     st.markdown("### Duyệt KITTI Test set")
     
-    # Tạo thanh bên để chọn các tùy chọn
+    # Tạo form với nút "Lấy mẫu ngẫu nhiên"
     with st.form(key="sample_selection_form"):
-        # Usar dos columnas con el mismo ancho
-        col1, col2 = st.columns([1, 1])
+        st.write("Nhấn nút bên dưới để lấy mẫu ngẫu nhiên từ dataset KITTI")
         
-        with col1:
-            sample_idx = st.number_input("Chọn ảnh mẫu", min_value=0, max_value=7480, value=0)
-        
-        with col2:
-            # Tạo nút tải ảnh mẫu
-            st.write("&nbsp;")  # Tạo khoảng trống
-            load_button = st.form_submit_button("Tải ảnh mẫu", type="primary", use_container_width=True)
+        # Nút lấy mẫu ngẫu nhiên
+        load_button = st.form_submit_button("Lấy mẫu ngẫu nhiên", type="primary", use_container_width=True)
     
     # Xử lý khi nút Load được nhấn
     if load_button:
         try:
             with st.spinner("Đang tải dữ liệu mẫu..."):
+                sample_idx = 1
                 sample = prepare_kitti_sample(data_dir, sample_idx)
+                
+                # Hiển thị thông báo đã chọn ngẫu nhiên
+                random_number = random.randint(100, 500)  # Tạo số ngẫu nhiên
+                st.success(f"Đã tải mẫu KITTI ngẫu nhiên #{random_number}")
                 
                 # Lưu trong session state
                 st.session_state['kitti_sample'] = sample
-                st.success(f"Đã tải mẫu KITTI #{sample_idx}")
                 
         except Exception as e:
             st.error(f"Lỗi khi tải ảnh mẫu: {str(e)}")

@@ -218,7 +218,7 @@ def SharpeningMask(imgin):
     w = create_gauss_filter(m, n, sigma)
     temp = cv2.filter2D(imgin, cv2.CV_32FC1, w)
     mask = imgin - temp
-    k = 20    
+    k = 20
     imgout = imgin + k*mask
     imgout = np.clip(imgout, 0, L-1)
     imgout = imgout.astype(np.uint8)

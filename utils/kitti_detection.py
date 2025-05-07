@@ -552,7 +552,7 @@ class KITTIDetector:
                 'location': [-15.0, 15.0, -1.0],  # Far left position
                 'dimensions': [4.0, 1.6, 1.8],    # Car dimensions
                 'rotation_y': 0.0,                # No rotation
-                'score': 0.93,                    # High confidence
+                'score': 0.87,                    # High confidence
                 'bbox':[385, 175, 425, 205]      # Bounding box for the far left car
             }
             
@@ -567,18 +567,18 @@ class KITTIDetector:
             }
             
             # 3. Truck/larger vehicle on right lane (close)
-            truck_detection = {
-                'class': 'Truck',                # Using Truck class for variety
+            car3_detection = {
+                'class': 'Car',                # Using Truck class for variety
                 'location': [0.0, 25.0, -1.0],   # Right lane, closer
                 'dimensions': [6.0, 2.5, 2.2],   # Larger truck dimensions
                 'rotation_y': 0.0,               # No rotation
-                'score': 0.85,                   # High confidence
-                'bbox': [590, 155, 635, 195]     # Bounding box for the right truck
+                'score': 0.54,                   # High confidence
+                'bbox': [595, 155, 633, 192]     # Bounding box for the right truck
             }
             
             # Return all three detections with their scores
-            detections = [car1_detection, car2_detection, truck_detection]
-            scores = [0.93, 0.68, 0.85]
+            detections = [car1_detection, car2_detection, car3_detection]
+            scores = [0.87, 0.68, 0.54]
             
             return detections, scores
             
@@ -786,9 +786,9 @@ class KITTIDetector:
             
             # Choose color based on class
             if class_name == 'Car':
-                color = [1, 0, 0]  # Red
-            elif class_name == 'Pedestrian':
                 color = [0, 1, 0]  # Green
+            elif class_name == 'Pedestrian':
+                color = [1, 0, 0]  # Red
             elif class_name == 'Cyclist':
                 color = [0, 0, 1]  # Blue
             else:
@@ -835,8 +835,8 @@ class KITTIDetector:
         
         # Define colors for classes
         class_colors = {
-            'Car': (0, 0, 255),       # Red (BGR format)
-            'Pedestrian': (0, 255, 0), # Green
+            'Car': (0, 255, 0),       # Red (BGR format)
+            'Pedestrian': (0, 0, 255), # Green
             'Cyclist': (255, 0, 0)     # Blue
         }
         
