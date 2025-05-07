@@ -10,6 +10,86 @@ def load_image_processor():
     return ImageProcessor()
 
 def show():
+    # Sección de introducción
+    with st.expander("🔍 Giới thiệu về xử lý ảnh số", expanded=False):
+        st.markdown("""
+        ### Giới thiệu về xử lý ảnh số
+        
+        Tính năng xử lý ảnh số tích hợp các phương pháp xử lý từ 3 chương quan trọng trong lĩnh vực này:
+        
+        #### Chương 3: Các phép toán điểm ảnh
+        Xử lý hình ảnh ở mức pixel, áp dụng các biến đổi toán học cho từng điểm ảnh riêng biệt:
+        - **Negative**: Đảo âm bản ảnh bằng cách lấy giá trị 255 - giá trị pixel
+        - **Logarit/Gamma**: Biến đổi phi tuyến để tăng cường chi tiết vùng tối/sáng
+        - **Histogram**: Phân tích và cân bằng phân phối cường độ màu trong ảnh
+        - **Làm nét cạnh**: Tăng cường chi tiết và viền bằng convolution
+        
+        #### Chương 4: Xử lý trong miền tần số
+        Áp dụng biến đổi Fourier để xử lý ảnh trong miền tần số:
+        - **Spectrum**: Hiển thị phổ tần số của ảnh
+        - **Lọc thông cao/thấp**: Loại bỏ nhiễu và mẫu lặp lại không mong muốn
+        - **Khử mờ chuyển động**: Phục hồi ảnh bị mờ do chuyển động
+        
+        #### Chương 9: Xử lý hình thái học
+        Thao tác với hình dạng và cấu trúc của đối tượng trong ảnh:
+        - **Erosion (Co)**: Thu nhỏ đối tượng, loại bỏ chi tiết nhỏ
+        - **Dilation (Giãn)**: Mở rộng đối tượng, lấp đầy lỗ hổng
+        - **Phát hiện đường biên**: Xác định và hiển thị đường viền của đối tượng
+        
+        Các phương pháp này có ứng dụng rộng rãi trong:
+        - Xử lý ảnh y tế và phân tích hình ảnh khoa học
+        - Cải thiện chất lượng ảnh và khôi phục ảnh
+        - Trích xuất đặc trưng cho hệ thống thị giác máy tính
+        - Xử lý tiền ảnh cho các thuật toán AI
+        """)
+            
+    # Sección de instrucciones
+    with st.expander("📋 Hướng dẫn sử dụng", expanded=False):
+        st.markdown("""
+        ### Hướng dẫn sử dụng
+        
+        #### Cách thực hiện xử lý ảnh:
+        
+        1. **Chọn chương xử lý**
+           - Chương 3: Xử lý điểm ảnh (Điểm Ảnh)
+           - Chương 4: Xử lý tần số
+           - Chương 9: Xử lý hình thái
+        
+        2. **Chọn phép toán**
+           - Mỗi chương sẽ hiển thị danh sách các phép toán có thể áp dụng
+           - Chọn một phép toán phù hợp với nhu cầu xử lý của bạn
+        
+        3. **Tải ảnh lên**
+           - Nhấn "Browse files" để tải ảnh từ thiết bị
+           - Hỗ trợ các định dạng: JPG, JPEG, PNG, TIF, TIFF
+           - Ảnh sẽ được hiển thị bên trái màn hình
+        
+        4. **Xem kết quả và tải xuống**
+           - Kết quả xử lý sẽ hiển thị bên phải
+           - Nhấn "Tải xuống kết quả" để lưu ảnh đã xử lý
+           - Chọn định dạng tải xuống: JPG, PNG hoặc TIFF
+        
+        #### Gợi ý cho từng loại xử lý:
+        
+        **Xử lý điểm ảnh (Chương 3):**
+        - **Negative**: Tạo hiệu ứng âm bản
+        - **Logarit/Gamma**: Điều chỉnh độ sáng và tăng cường chi tiết vùng tối
+        - **HistEqual**: Cải thiện độ tương phản
+        - **Sharpening**: Làm sắc nét ảnh mờ
+        
+        **Xử lý tần số (Chương 4):**
+        - **Spectrum**: Phân tích phổ tần số của ảnh
+        - **RemoveMoire**: Loại bỏ hiệu ứng Moire trong ảnh scan
+        - **RemoveInterference**: Loại bỏ nhiễu giao thoa
+        - **DeMotion**: Khử mờ chuyển động
+        
+        **Xử lý hình thái (Chương 9):**
+        - **Erosion**: Loại bỏ chi tiết nhỏ, làm mỏng đối tượng
+        - **Dilation**: Làm dày đối tượng, lấp đầy lỗ hổng nhỏ
+        - **Boundary**: Phát hiện biên của đối tượng
+        - **Contour**: Tạo đường viền cho các đối tượng trong ảnh
+        """)
+            
     image_processor = load_image_processor()
     available_functions = image_processor.get_available_functions()
     
@@ -32,7 +112,7 @@ def show():
     )
     
     # Thêm hỗ trợ cho định dạng TIFF
-    uploaded_file = st.file_uploader("Chọn ảnh để xử lý", type=["jpg", "jpeg", "png", "tif", "tiff"])
+    uploaded_file = st.file_uploader("Chọn ảnh để xử lý", type=["jpg", "jpeg", "png", "webp", "avif", "tif", "tiff"])
     
     if uploaded_file is not None:
         # Kiểm tra định dạng file

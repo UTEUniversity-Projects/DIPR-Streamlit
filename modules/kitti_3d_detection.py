@@ -97,6 +97,93 @@ def plot_3d_visualization(vis_objects: List):
     return fig
 
 def show():
+    # Thêm phần giới thiệu
+    with st.expander("🔍 Giới thiệu về nhận dạng 3D KITTI", expanded=False):
+        st.markdown("""
+        ### Giới thiệu về nhận dạng đối tượng 3D KITTI
+        
+        Tính năng nhận dạng đối tượng 3D KITTI sử dụng công nghệ tiên tiến để phát hiện xe cộ, người đi bộ và các đối tượng khác trong môi trường 3D, dựa trên dữ liệu từ cảm biến LiDAR và camera.
+        
+        #### KITTI Dataset
+        
+        KITTI là một trong những bộ dữ liệu quan trọng nhất trong lĩnh vực xe tự lái, được thu thập bởi Karlsruhe Institute of Technology và Toyota Technological Institute tại Chicago. Bộ dữ liệu này bao gồm:
+        
+        - Dữ liệu LiDAR 3D từ cảm biến Velodyne
+        - Hình ảnh màu từ camera độ phân giải cao
+        - Thông số hiệu chuẩn (calibration) giữa các cảm biến
+        - Nhãn đối tượng: xe hơi, người đi bộ, xe đạp, v.v.
+        
+        #### Kiến trúc PointPillars
+        
+        Mô hình nhận dạng 3D sử dụng trong tính năng này dựa trên kiến trúc PointPillars, một phương pháp hiệu quả để xử lý dữ liệu point cloud:
+        
+        1. **Pillar Feature Extractor (PFE)**:
+           - Chuyển đổi point cloud dạng thưa thớt thành các "cột" (pillars)
+           - Trích xuất đặc trưng từ các điểm trong mỗi cột
+           - Tạo biểu diễn dạng lưới 2D của không gian 3D
+        
+        2. **Region Proposal Network (RPN)**:
+           - Sử dụng đặc trưng từ PFE để dự đoán vị trí và lớp của đối tượng
+           - Tạo ra các bounding box 3D với thông tin về vị trí, kích thước, hướng
+           - Tính điểm tin cậy cho mỗi dự đoán
+        
+        #### Ứng dụng trong thực tế
+        
+        Nhận dạng đối tượng 3D có nhiều ứng dụng quan trọng:
+        
+        - **Xe tự lái**: Phát hiện và phân loại đối tượng xung quanh xe
+        - **Robotics**: Giúp robot cảm nhận và hiểu môi trường 3D
+        - **Định vị và lập bản đồ (SLAM)**: Xây dựng bản đồ 3D chi tiết
+        - **Thực tế tăng cường (AR)**: Tích hợp đối tượng ảo vào môi trường thực
+        """)
+            
+    # Thêm phần hướng dẫn
+    with st.expander("📋 Hướng dẫn sử dụng", expanded=False):
+        st.markdown("""
+        ### Hướng dẫn sử dụng
+        
+        #### Cách sử dụng tính năng nhận dạng 3D KITTI:
+        
+        1. **Chọn dữ liệu mẫu**
+           - Nhập số thứ tự mẫu từ tập test của KITTI dataset (0-7480)
+           - Nhấn "Tải ảnh mẫu" để tải dữ liệu từ mẫu đã chọn
+        
+        2. **Xem dữ liệu**
+           - **Ảnh gốc**: Hiển thị hình ảnh từ camera
+           - **Point Cloud (2D view)**: Hiển thị point cloud được chiếu lên ảnh 2D
+           - Màu sắc của điểm phản ánh độ sâu (khoảng cách)
+        
+        3. **Nhận dạng đối tượng**
+           - Nhấn "Nhận dạng đối tượng 3D" để bắt đầu phát hiện
+           - Xử lý có thể mất vài giây tùy thuộc vào độ phức tạp của scene
+        
+        4. **Xem kết quả**
+           - **Kết quả 2D**: Hiển thị bounding box trên ảnh
+           - **Kết quả 3D**: Hiển thị bounding box 3D trên point cloud
+           - **Thông tin đối tượng**: Chi tiết về các đối tượng được phát hiện
+        
+        #### Hiểu kết quả 3D
+        
+        Kết quả 3D hiển thị dưới dạng biểu đồ tương tác mà bạn có thể:
+        - **Xoay**: Kéo để xoay cảnh 3D
+        - **Thu phóng**: Cuộn để phóng to/nhỏ
+        - **Di chuyển**: Nhấn Shift + kéo để di chuyển
+        
+        Mỗi loại đối tượng được hiển thị với một màu khác nhau:
+        - **Xe hơi (Car)**: Màu đỏ
+        - **Người đi bộ (Pedestrian)**: Màu xanh lá
+        - **Xe đạp (Cyclist)**: Màu xanh dương
+        
+        #### Cách đọc thông tin đối tượng
+        
+        Mỗi đối tượng được hiển thị với các thông tin sau:
+        - **Loại**: Car, Pedestrian, Cyclist
+        - **Điểm tin cậy**: Mức độ tin cậy từ 0-1 (càng cao càng chính xác)
+        - **Vị trí**: Tọa độ (x, y, z) trong không gian 3D
+        - **Kích thước**: Chiều dài, rộng, cao của đối tượng
+        - **Góc quay**: Hướng của đối tượng theo độ
+        """)
+        
     st.markdown("### Nhận dạng đối tượng 3D KITTI Dataset")
     
     # Kiểm tra file mô hình ONNX có tồn tại không
@@ -145,14 +232,17 @@ def show():
     st.markdown("### Duyệt KITTI Test set")
     
     # Tạo thanh bên để chọn các tùy chọn
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        sample_idx = st.number_input("Chọn ảnh mẫu", min_value=0, max_value=7480, value=0)
-    
-    with col2:
-        st.markdown("&nbsp;")  # Khoảng trắng
-        load_button = st.button("Tải ảnh mẫu", type="primary")
+    with st.form(key="sample_selection_form"):
+        # Usar dos columnas con el mismo ancho
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            sample_idx = st.number_input("Chọn ảnh mẫu", min_value=0, max_value=7480, value=0)
+        
+        with col2:
+            # Tạo nút tải ảnh mẫu
+            st.write("&nbsp;")  # Tạo khoảng trống
+            load_button = st.form_submit_button("Tải ảnh mẫu", type="primary", use_container_width=True)
     
     # Xử lý khi nút Load được nhấn
     if load_button:
@@ -350,30 +440,3 @@ def show():
                             st.info("Không có đối tượng nào được phát hiện")
                 except Exception as e:
                     st.error(f"Lỗi khi phát hiện đối tượng: {str(e)}")
-        
-    # Thêm hướng dẫn và tài liệu tham khảo
-    with st.expander("Hướng dẫn sử dụng và tài liệu", expanded=False):
-        st.markdown("""
-        ### Hướng dẫn sử dụng
-        
-        **KITTI Dataset** là một bộ dữ liệu chuẩn trong lĩnh vực nhận dạng và phát hiện đối tượng 3D, chủ yếu dùng cho xe tự hành. Mô-đun này sử dụng mô hình PointPillars để phát hiện đối tượng 3D từ dữ liệu point cloud.
-        
-        #### Cách sử dụng:
-        1. **Chọn ảnh mẫu**: Chọn số thứ tự mẫu từ dataset KITTI và nhấn "Tải ảnh mẫu"
-        2. **Nhận dạng đối tượng**: Nhấn "Nhận dạng đối tượng 3D" để chạy phát hiện
-        3. **Upload dữ liệu tùy chỉnh**: Bạn có thể tải lên file point cloud dạng .bin để phát hiện
-        
-        #### Giải thích kết quả:
-        - **Kết quả 2D**: Hiển thị ảnh với các bounding box 2D và nhãn
-        - **Kết quả 3D**: Hiển thị point cloud và bounding box 3D tương tác
-        - **Thông tin đối tượng**: Chi tiết về các đối tượng phát hiện được
-        
-        #### Tài liệu tham khảo:
-        - [KITTI Dataset](http://www.cvlibs.net/datasets/kitti/eval_object.php)
-        - [PointPillars Paper](https://arxiv.org/abs/1812.05784)
-        - [OpenCV Zoo](https://github.com/opencv/opencv_zoo)
-        
-        #### Cải thiện hiệu suất:
-        - Sử dụng GPU nếu có (cần cài đặt CUDA và onnxruntime-gpu)
-        - Giảm số lượng điểm hiển thị nếu bị chậm
-        """)

@@ -177,7 +177,6 @@ elif mode.startswith("🚗"):
         """)
 
 # Footer
-st.markdown("---")
 st.markdown("""
 <div class="footer">
     <p>Ứng dụng Xử lý Ảnh Số - Môn Xử lý Ảnh Số</p>

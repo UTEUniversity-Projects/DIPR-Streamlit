@@ -2,7 +2,7 @@ import streamlit as st
 import cv2
 import numpy as np
 import time
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 @st.cache_resource
 def load_face_detector():
@@ -164,6 +164,58 @@ def draw_stable_results(frame: np.ndarray, stable_faces: List[Dict],
     return result
 
 def show():
+    # Thêm phần giới thiệu và hướng dẫn
+    with st.expander("🔍 Giới thiệu về nhận dạng khuôn mặt", expanded=False):
+        st.markdown("""
+        ### Giới thiệu về nhận dạng khuôn mặt
+        
+        Tính năng nhận dạng khuôn mặt trong ứng dụng này sử dụng kiến trúc hai giai đoạn hiện đại:
+        
+        1. **YuNet Face Detector**: Mô hình phát hiện khuôn mặt dựa trên CNN (Convolutional Neural Network) được tối ưu hóa
+           - Kiến trúc: Lightweight network với các khối ResNet cải tiến
+           - Hiệu suất: Độ chính xác cao và xử lý thời gian thực trên CPU
+           - Định dạng: ONNX với kích thước nhỏ (< 1MB)
+        
+        2. **SFace Recognition**: Mô hình nhận dạng khuôn mặt với độ chính xác cao
+           - Kiến trúc: Dựa trên mạng ResNet-50 cải tiến cho các embedding vector 128 chiều
+           - Training: Được huấn luyện trên dataset lớn với loss function đặc biệt giúp phân biệt tốt các khuôn mặt
+           - Phương pháp: So sánh vector embedding với các vector trong cơ sở dữ liệu
+        
+        Ứng dụng cũng tích hợp thuật toán theo dõi khuôn mặt (face tracking) để đảm bảo ổn định khi nhận dạng video thời gian thực, giảm hiện tượng "chớp nháy" khi xác định danh tính.
+        
+        **Ứng dụng thực tế:**
+        - Hệ thống bảo mật và kiểm soát truy cập
+        - Hệ thống điểm danh tự động
+        - Trải nghiệm cá nhân hóa trong các hệ thống thông minh
+        - Xác thực danh tính không tiếp xúc
+        """)
+            
+    with st.expander("📋 Hướng dẫn sử dụng", expanded=False):
+        st.markdown("""
+        ### Hướng dẫn sử dụng
+        
+        #### 1. Chế độ ảnh tĩnh
+        - **Upload ảnh**: Tải lên ảnh chứa khuôn mặt cần nhận dạng
+        - **Chụp từ webcam**: Chụp ảnh trực tiếp từ webcam để nhận dạng
+        
+        #### 2. Chế độ video trực tiếp
+        - **Bắt đầu**: Mở camera và bắt đầu phát hiện khuôn mặt
+        - **Dừng**: Dừng quá trình nhận dạng và đóng camera
+        - **Điều chỉnh độ phân giải**: Chọn độ phân giải camera phù hợp
+        - **Tốc độ xử lý**: Điều chỉnh tốc độ xử lý khung hình (giá trị thấp hơn = xử lý nhiều frame hơn)
+        
+        #### Mẹo sử dụng:
+        - **Ánh sáng**: Đảm bảo khuôn mặt được chiếu sáng tốt
+        - **Góc nhìn**: Hướng mặt thẳng vào camera để có kết quả tốt nhất
+        - **Khoảng cách**: Đứng cách camera khoảng 0.5-1m
+        - **Đăng ký mặt mới**: Nếu khuôn mặt chưa được nhận dạng, sử dụng chức năng "Đăng ký khuôn mặt mới"
+        
+        #### Xử lý lỗi:
+        - **Không nhận dạng được**: Đảm bảo khuôn mặt đã được đăng ký trong hệ thống
+        - **Nhận dạng sai**: Cập nhật database với nhiều mẫu khuôn mặt hơn
+        - **Không hiển thị camera**: Kiểm tra quyền truy cập camera trong trình duyệt
+        """)
+    
     # Choose input mode
     mode = st.radio("Chọn chế độ nhận dạng:", ["📸 Ảnh tĩnh", "🎥 Video trực tiếp"])
     
