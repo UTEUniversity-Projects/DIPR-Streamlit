@@ -8,6 +8,8 @@ Chú ý:
 2. Code phải đầy đủ, chi tiết, trình bày theo từng file một
 3. Không trình bày lại code trong 3 file: chapter3.py, chapter4.py, chapter9.py (vì đã có rồi)
 
+Phần bài tập làm thêm: Nhận diện đối tượng sử dụng KITTI 3D DATASET với kiến trúc PointPillars
+
 Cấu trúc project gợi ý:
 project/
 ├── app.py                  # Main Streamlit application
