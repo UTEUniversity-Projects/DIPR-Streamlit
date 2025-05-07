@@ -142,7 +142,7 @@ def show():
         return
     
     # Dataset browser
-    st.markdown("### Duyệt dataset KITTI")
+    st.markdown("### Duyệt KITTI Test set")
     
     # Tạo thanh bên để chọn các tùy chọn
     col1, col2 = st.columns([1, 1])
@@ -350,85 +350,7 @@ def show():
                             st.info("Không có đối tượng nào được phát hiện")
                 except Exception as e:
                     st.error(f"Lỗi khi phát hiện đối tượng: {str(e)}")
-    
-    # Upload custom data
-    st.markdown("### Upload dữ liệu tùy chỉnh")
-    
-    # File upload for custom data
-    point_cloud_file = st.file_uploader("Upload file Point Cloud (.bin)", type=["bin"])
-    
-    if point_cloud_file is not None:
-        # Create temporary file for processing
-        with open("temp_pointcloud.bin", "wb") as f:
-            f.write(point_cloud_file.getbuffer())
         
-        try:
-            # Read point cloud
-            point_cloud = detector.read_velodyne("temp_pointcloud.bin")
-            
-            # Simple visualization of point cloud
-            st.write(f"Point cloud shape: {point_cloud.shape}")
-            
-            # Tạo Open3D point cloud để hiển thị
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(point_cloud[:, :3])
-            
-            # Thêm màu dựa trên chiều cao
-            colors = np.zeros((len(point_cloud), 3))
-            colors[:, 0] = 0.8  # Default color (light blue)
-            
-            # Color by height
-            min_z = np.min(point_cloud[:, 2])
-            max_z = np.max(point_cloud[:, 2])
-            if max_z > min_z:
-                height_colors = (point_cloud[:, 2] - min_z) / (max_z - min_z)
-                colors[:, 2] = height_colors  # Blue channel varies with height
-            
-            pcd.colors = o3d.utility.Vector3dVector(colors)
-            
-            # Hiển thị bằng Plotly
-            fig = plot_3d_visualization([pcd])
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Detection button
-            if st.button("Nhận dạng đối tượng 3D trên dữ liệu upload", type="primary"):
-                with st.spinner("Đang phân tích..."):
-                    try:
-                        # Detect objects
-                        detections, scores = detector.detect(point_cloud)
-                        
-                        if not detections:
-                            st.warning("Không phát hiện đối tượng nào trong dữ liệu upload")
-                            return
-                            
-                        # 3D visualization
-                        st.subheader("Kết quả 3D")
-                        vis_objects = detector.visualize_3d(point_cloud, detections, scores)
-                        
-                        # Use Plotly for interactive 3D visualization
-                        fig = plot_3d_visualization(vis_objects)
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        # Detection summary
-                        st.subheader("Thông tin đối tượng")
-                        for i, (detection, score) in enumerate(zip(detections, scores)):
-                            st.markdown(f"**Đối tượng {i+1}:**")
-                            st.write(f"- Loại: {detection['class']}")
-                            st.write(f"- Vị trí: x={detection['location'][0]:.1f}, y={detection['location'][1]:.1f}, z={detection['location'][2]:.1f}")
-                            st.write(f"- Kích thước: {detection['dimensions'][0]:.1f} x {detection['dimensions'][1]:.1f} x {detection['dimensions'][2]:.1f}")
-                            st.write(f"- Góc quay: {np.degrees(detection['rotation_y']):.1f}°")
-                            st.write(f"- Độ tin cậy: {score:.2f}")
-                            st.markdown("---")
-                    except Exception as e:
-                        st.error(f"Lỗi khi phát hiện đối tượng: {str(e)}")
-        except Exception as e:
-            st.error(f"Lỗi khi xử lý point cloud: {str(e)}")
-            st.warning("Vui lòng kiểm tra lại file point cloud")
-            
-        # Clean up
-        if os.path.exists("temp_pointcloud.bin"):
-            os.remove("temp_pointcloud.bin")
-    
     # Thêm hướng dẫn và tài liệu tham khảo
     with st.expander("Hướng dẫn sử dụng và tài liệu", expanded=False):
         st.markdown("""
