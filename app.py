@@ -117,6 +117,7 @@ with st.sidebar:
         [
             "🖼️ Nhận dạng khuôn mặt",
             "🍎 Nhận dạng trái cây",
+            "🐾 Nhận dạng động vật",
             "⚙️ Xử lý ảnh số",
             "➕ Đăng ký khuôn mặt mới",
             "🚗 Nhận dạng 3D KITTI"
@@ -127,6 +128,7 @@ with st.sidebar:
 header_map = {
     "🖼️": "🖼️ Nhận dạng khuôn mặt",
     "🍎": "🍎 Nhận dạng trái cây",
+    "🐾": "🐾 Nhận dạng động vật",
     "⚙️": "⚙️ Xử lý ảnh số",
     "➕": "➕ Đăng ký khuôn mặt mới",
     "🚗": "🚗 Nhận dạng 3D KITTI"
@@ -153,6 +155,10 @@ if mode.startswith("🖼️"):
 elif mode.startswith("🍎"):
     from modules import fruit_detection
     fruit_detection.show()
+    
+elif mode.startswith("🐾"):
+    from modules import animal_detection
+    animal_detection.show()
     
 elif mode.startswith("⚙️"):
     from modules import image_processing

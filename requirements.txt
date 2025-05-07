@@ -9,6 +9,7 @@ scipy>=1.7.0
 onnxruntime>=1.10.0
 pyyaml>=6.0.0
 tqdm>=4.62.0
+roboflow>=1.1.9
 # KITTI 3D dependencies
 torch>=2.0.0
 torchvision>=0.15.0
