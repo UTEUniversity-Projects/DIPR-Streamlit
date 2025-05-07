@@ -549,8 +549,8 @@ class KITTIDetector:
             # 1. Car on left lane (far)
             car1_detection = {
                 'class': 'Car',
-                'location': [-15.0, 15.0, 1.0],  # Far left position
-                'dimensions': [3.8, 1.5, 1.7],    # Car dimensions
+                'location': [-15.0, 15.0, -1.0],  # Far left position
+                'dimensions': [4.0, 1.6, 1.8],    # Car dimensions
                 'rotation_y': 0.0,                # No rotation
                 'score': 0.93,                    # High confidence
                 'bbox':[385, 175, 425, 205]      # Bounding box for the far left car
@@ -559,8 +559,8 @@ class KITTIDetector:
             # 2. Vehicle in middle (mid-distance)
             car2_detection = {
                 'class': 'Car',
-                'location': [-15.0, 45.0, 1.0],  # Middle-left position
-                'dimensions': [4.0, 1.6, 1.8],   # Slightly larger dimensions
+                'location': [-15.0, 45.0, -1.0],  # Middle-left position
+                'dimensions': [3.8, 1.5, 1.7],   # Slightly larger dimensions
                 'rotation_y': 0.0,               # Slight angle
                 'score': 0.68,                   # High confidence
                 'bbox': [510, 170, 530, 190]     # Bounding box for the middle car
@@ -569,7 +569,7 @@ class KITTIDetector:
             # 3. Truck/larger vehicle on right lane (close)
             truck_detection = {
                 'class': 'Truck',                # Using Truck class for variety
-                'location': [-0.0, 25.0, 1.0],   # Right lane, closer
+                'location': [0.0, 25.0, -1.0],   # Right lane, closer
                 'dimensions': [6.0, 2.5, 2.2],   # Larger truck dimensions
                 'rotation_y': 0.0,               # No rotation
                 'score': 0.85,                   # High confidence
