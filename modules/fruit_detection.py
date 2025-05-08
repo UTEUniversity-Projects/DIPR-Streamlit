@@ -54,7 +54,12 @@ def show():
            - Hỗ trợ các định dạng: JPG, JPEG, PNG, WEBP
            - Kích thước ảnh tối ưu: 640x640 pixels
         
-        2. **Xem kết quả nhận dạng**
+        2. **Lựa chọn thẻ**
+           - Sử dụng menu chọn thẻ để lọc các loại trái cây bạn muốn hiển thị
+           - Có thể chọn nhiều loại cùng lúc
+           - Chọn "Tất cả" để hiển thị tất cả các loại trái cây phát hiện được
+        
+        3. **Xem kết quả nhận dạng**
            - Ảnh gốc sẽ hiển thị bên trái
            - Ảnh kết quả với các bounding box sẽ hiển thị bên phải
            - Thông tin về loại trái cây và độ tin cậy sẽ hiển thị bên dưới
@@ -78,8 +83,12 @@ def show():
         from utils.fruit_detection import FruitDetector
         fruit_detector = FruitDetector("models/fruit_detection.pt")
         has_fruit_detector = True
+        
+        # Lấy danh sách các loại trái cây từ detector
+        fruit_classes = list(fruit_detector.class_names.values())
     except Exception:
         has_fruit_detector = False
+        fruit_classes = ["Apple", "Banana", "Kiwi", "Orange", "Pear"]
     
     if not has_fruit_detector:
         st.error("Model YOLOv8 chưa được cài đặt.")
@@ -90,6 +99,33 @@ def show():
         3. Khởi động lại ứng dụng
         """)
     else:
+        # Thêm widget chọn tag
+        st.sidebar.markdown("### Bộ lọc loại trái cây")
+        
+        # Khởi tạo các biến session state nếu chưa có
+        if 'selected_fruit_tags' not in st.session_state:
+            st.session_state.selected_fruit_tags = fruit_classes.copy()
+        
+        # Tạo multiselect với tất cả các loại trái cây
+        selected_tags = st.sidebar.multiselect(
+            "Chọn loại trái cây cần hiển thị:",
+            options=fruit_classes,
+            default=st.session_state.selected_fruit_tags,
+            help="Chọn các loại trái cây bạn muốn hiển thị kết quả nhận dạng"
+        )
+        
+        # Cập nhật session state khi có thay đổi
+        st.session_state.selected_fruit_tags = selected_tags
+        
+        # Thêm nút chọn/bỏ chọn tất cả
+        col1, col2 = st.sidebar.columns(2)
+        if col1.button("Chọn tất cả"):
+            st.session_state.selected_fruit_tags = fruit_classes.copy()
+            st.rerun()
+        if col2.button("Bỏ chọn tất cả"):
+            st.session_state.selected_fruit_tags = []
+            st.rerun()
+        
         uploaded_file = st.file_uploader("Chọn ảnh chứa trái cây", type=["jpg", "jpeg", "png", "webp", "jfif", "tif", "tiff"])
         
         if uploaded_file is not None:
@@ -102,16 +138,65 @@ def show():
                 st.image(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), use_container_width=True)
             
             with st.spinner("Đang nhận dạng trái cây..."):
+                # Phát hiện tất cả trái cây
                 boxes, labels, scores = fruit_detector.detect(img)
-                result_img = fruit_detector.draw_results(img, boxes, labels, scores)
+                
+                # Lọc kết quả theo các tag đã chọn
+                if selected_tags:
+                    filtered_indices = [i for i, label in enumerate(labels) if label in selected_tags]
+                    filtered_boxes = boxes[filtered_indices] if len(filtered_indices) > 0 else np.array([])
+                    filtered_labels = [labels[i] for i in filtered_indices]
+                    filtered_scores = [scores[i] for i in filtered_indices]
+                else:
+                    # Nếu không có tag nào được chọn, hiển thị ảnh không có bounding box
+                    filtered_boxes = np.array([])
+                    filtered_labels = []
+                    filtered_scores = []
+                
+                # Vẽ kết quả đã lọc lên ảnh
+                result_img = fruit_detector.draw_results(img, filtered_boxes, filtered_labels, filtered_scores)
                 
                 with col2:
                     st.subheader("Kết quả")
                     st.image(cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB), use_container_width=True)
                 
+                # Hiển thị thông tin về trái cây được phát hiện
                 if len(boxes) > 0:
                     st.markdown("### Trái cây phát hiện được:")
-                    for i, (label, score) in enumerate(zip(labels, scores)):
-                        st.write(f"**{i+1}.** {label} - Độ tin cậy: {score:.2f}")
+                    
+                    # Tạo bảng tóm tắt với số lượng mỗi loại
+                    summary = {}
+                    for label in labels:
+                        if label in summary:
+                            summary[label] += 1
+                        else:
+                            summary[label] = 1
+                    
+                    # Hiển thị bảng tóm tắt
+                    st.markdown("#### Tóm tắt:")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("**Loại trái cây**")
+                        for label in summary:
+                            st.markdown(f"- {label}")
+                    with col2:
+                        st.markdown("**Số lượng**")
+                        for label in summary:
+                            count = summary[label]
+                            if label in selected_tags:
+                                st.markdown(f"- {count} (hiển thị)")
+                            else:
+                                st.markdown(f"- {count} (đã lọc)")
+                    
+                    # Hiển thị chi tiết các trái cây được lọc
+                    if filtered_boxes.size > 0:
+                        st.markdown("#### Chi tiết trái cây được hiển thị:")
+                        for i, (label, score) in enumerate(zip(filtered_labels, filtered_scores)):
+                            st.write(f"**{i+1}.** {label} - Độ tin cậy: {score:.2f}")
+                    else:
+                        if selected_tags:
+                            st.warning(f"Không phát hiện loại trái cây nào trong các tag đã chọn: {', '.join(selected_tags)}")
+                        else:
+                            st.warning("Không có loại trái cây nào được chọn để hiển thị. Vui lòng chọn ít nhất một loại trái cây.")
                 else:
                     st.warning("Không phát hiện trái cây nào trong ảnh!")

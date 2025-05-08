@@ -56,9 +56,14 @@ def show():
            - Hỗ trợ các định dạng: JPG, JPEG, PNG, WEBP
            - Ảnh có thể chứa một hoặc nhiều động vật
         
-        2. **Xem kết quả nhận dạng**
+        2. **Chọn thẻ phân loại**
+           - Sử dụng menu chọn thẻ để lọc các loài động vật bạn muốn hiển thị
+           - Có thể chọn nhiều loài cùng lúc
+           - Chọn "Tất cả" để hiển thị tất cả các loài động vật phát hiện được
+        
+        3. **Xem kết quả nhận dạng**
            - Ảnh gốc sẽ hiển thị bên trái
-           - Ảnh kết quả với các khung đánh dấu động vật sẽ hiển thị bên phải
+           - Ảnh kết quả với các khung đánh dấu động vật được lọc sẽ hiển thị bên phải
            - Thông tin về loài động vật và độ tin cậy sẽ hiển thị bên dưới
         
         #### Lưu ý khi sử dụng:
@@ -75,6 +80,9 @@ def show():
         - Tránh các vật thể che khuất quá nhiều
         - Nếu có nhiều động vật, cố gắng để chúng không chồng lấn quá nhiều
         """)
+    
+    # Define specific animal classes we want to support for filtering
+    animal_classes = ["dog", "cat", "bird", "horse", "cow", "elephant", "bear", "zebra", "giraffe", "tiger"]
     
     # Check if model exists
     model_exists = False
@@ -111,7 +119,34 @@ def show():
         5. Khởi động lại ứng dụng
         """)
         
-    else:
+    # Khởi tạo các biến session state nếu chưa có
+    if 'selected_animal_tags' not in st.session_state:
+        st.session_state.selected_animal_tags = animal_classes.copy()
+        
+    # Thêm widget chọn tag vào sidebar
+    st.sidebar.markdown("### Bộ lọc loài động vật")
+    
+    # Tạo multiselect với tất cả các loài động vật
+    selected_tags = st.sidebar.multiselect(
+        "Chọn loài động vật cần hiển thị:",
+        options=animal_classes,
+        default=st.session_state.selected_animal_tags,
+        help="Chọn các loài động vật bạn muốn hiển thị kết quả nhận dạng"
+    )
+    
+    # Cập nhật session state khi có thay đổi
+    st.session_state.selected_animal_tags = selected_tags
+    
+    # Thêm nút chọn/bỏ chọn tất cả
+    col1, col2 = st.sidebar.columns(2)
+    if col1.button("Chọn tất cả", key="select_all_animals"):
+        st.session_state.selected_animal_tags = animal_classes.copy()
+        st.rerun()
+    if col2.button("Bỏ chọn tất cả", key="deselect_all_animals"):
+        st.session_state.selected_animal_tags = []
+        st.rerun()
+    
+    if model_exists:
         # Upload image
         uploaded_file = st.file_uploader("Chọn ảnh chứa động vật", type=["jpg", "jpeg", "png", "webp", "jfif", "tif", "tiff"])
         
@@ -143,38 +178,69 @@ def show():
                         # Process image
                         with st.spinner("Đang nhận dạng động vật..."):
                             try:
+                                # Phát hiện tất cả động vật
                                 boxes, labels, scores = animal_detector.detect(img)
-                                result_img = animal_detector.draw_results(img, boxes, labels, scores)
+                                
+                                # Lọc kết quả theo các tag đã chọn, chỉ giữ lại các nhãn thuộc animal_classes
+                                valid_labels = []
+                                valid_indices = []
+                                
+                                for i, label in enumerate(labels):
+                                    # Kiểm tra xem nhãn có thuộc 10 loại động vật đã định nghĩa không
+                                    if label in animal_classes:
+                                        valid_labels.append(label)
+                                        valid_indices.append(i)
+                                
+                                # Lấy chỉ các kết quả hợp lệ
+                                if valid_indices:
+                                    valid_boxes = boxes[valid_indices]
+                                    valid_scores = [scores[i] for i in valid_indices]
+                                else:
+                                    valid_boxes = np.array([])
+                                    valid_scores = []
+                                
+                                # Lọc tiếp dựa trên tag đã chọn
+                                if selected_tags and valid_indices:
+                                    filtered_indices = [i for i, label in enumerate(valid_labels) if label in selected_tags]
+                                    filtered_boxes = valid_boxes[filtered_indices] if len(filtered_indices) > 0 else np.array([])
+                                    filtered_labels = [valid_labels[i] for i in filtered_indices]
+                                    filtered_scores = [valid_scores[i] for i in filtered_indices]
+                                else:
+                                    # Nếu không có tag nào được chọn, hiển thị ảnh không có bounding box
+                                    filtered_boxes = np.array([])
+                                    filtered_labels = []
+                                    filtered_scores = []
+                                
+                                # Vẽ kết quả đã lọc lên ảnh
+                                result_img = animal_detector.draw_results(img, filtered_boxes, filtered_labels, filtered_scores)
                                 
                                 # Display result
                                 with col2:
                                     st.subheader("Kết quả")
                                     st.image(cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB), use_container_width=True)
                                 
-                                # Display information
-                                if len(boxes) > 0:
+                                # Hiển thị thông tin
+                                if len(valid_labels) > 0:
                                     st.markdown("### Động vật đã phát hiện:")
                                     
-                                    # Create a nice looking grid for animal results
+                                    # Tạo bảng tóm tắt với số lượng mỗi loại
                                     animal_count = {}
-                                    for label in labels:
+                                    for label in valid_labels:
                                         if label in animal_count:
                                             animal_count[label] += 1
                                         else:
                                             animal_count[label] = 1
                                     
-                                    # Create a grid of animals
-                                    col_count = 3  # Number of columns in the grid
+                                    # Hiển thị bảng tóm tắt
+                                    st.markdown("#### Tóm tắt:")
+                                    col_count = 3  # Số cột trong lưới
                                     cols = st.columns(col_count)
                                     
-                                    # Display each detected animal with details
-                                    for i, (label, score) in enumerate(zip(labels, scores)):
+                                    # Hiển thị tổng quan các loài động vật
+                                    for i, (label, count) in enumerate(animal_count.items()):
                                         with cols[i % col_count]:
-                                            st.markdown(f"**{i+1}. {label}**")
-                                            st.markdown(f"Độ tin cậy: {score:.2f}")
-                                            
-                                            # Add emoji based on animal type
-                                            emoji = "🐾"  # Default
+                                            # Thêm emoji dựa vào loài động vật
+                                            emoji = "🐾"  # Mặc định
                                             if label.lower() == "dog":
                                                 emoji = "🐕"
                                             elif label.lower() == "cat":
@@ -196,12 +262,65 @@ def show():
                                             elif label.lower() == "tiger":
                                                 emoji = "🐅"
                                             
-                                            st.markdown(f"{emoji} {label}")
+                                            # Hiển thị với trạng thái lọc
+                                            status = " (hiển thị)" if label in selected_tags else " (đã lọc)"
+                                            st.markdown(f"**{emoji} {label}:** {count}{status}")
                                     
-                                    # Display summary
-                                    st.markdown("### Tổng kết:")
-                                    summary_text = ", ".join([f"**{count} {label}**" for label, count in animal_count.items()])
-                                    st.markdown(f"Đã phát hiện {summary_text} trong ảnh.")
+                                    # Hiển thị chi tiết các động vật đã lọc
+                                    if filtered_boxes.size > 0:
+                                        st.markdown("#### Chi tiết động vật được hiển thị:")
+                                        # Create a nice looking grid for animal results
+                                        col_count = 3  # Number of columns in the grid
+                                        display_cols = st.columns(col_count)
+                                        
+                                        # Display each detected animal with details
+                                        for i, (label, score) in enumerate(zip(filtered_labels, filtered_scores)):
+                                            with display_cols[i % col_count]:
+                                                st.markdown(f"**{i+1}. {label}**")
+                                                st.markdown(f"Độ tin cậy: {score:.2f}")
+                                                
+                                                # Add emoji based on animal type
+                                                emoji = "🐾"  # Default
+                                                if label.lower() == "dog":
+                                                    emoji = "🐕"
+                                                elif label.lower() == "cat":
+                                                    emoji = "🐈"
+                                                elif label.lower() == "bird":
+                                                    emoji = "🐦"
+                                                elif label.lower() == "horse":
+                                                    emoji = "🐎"
+                                                elif label.lower() == "cow":
+                                                    emoji = "🐄"
+                                                elif label.lower() == "elephant":
+                                                    emoji = "🐘"
+                                                elif label.lower() == "bear":
+                                                    emoji = "🐻"
+                                                elif label.lower() == "zebra":
+                                                    emoji = "🦓"
+                                                elif label.lower() == "giraffe":
+                                                    emoji = "🦒"
+                                                elif label.lower() == "tiger":
+                                                    emoji = "🐅"
+                                                
+                                                st.markdown(f"{emoji} {label}")
+                                    else:
+                                        if selected_tags:
+                                            st.warning(f"Không phát hiện loài động vật nào trong các tag đã chọn: {', '.join(selected_tags)}")
+                                        else:
+                                            st.warning("Không có loài động vật nào được chọn để hiển thị. Vui lòng chọn ít nhất một loài.")
+                                    
+                                    # Display summary if there are matches
+                                    if len(filtered_labels) > 0:
+                                        st.markdown("### Tổng kết:")
+                                        filtered_summary = {}
+                                        for label in filtered_labels:
+                                            if label in filtered_summary:
+                                                filtered_summary[label] += 1
+                                            else:
+                                                filtered_summary[label] = 1
+                                        
+                                        summary_text = ", ".join([f"**{count} {label}**" for label, count in filtered_summary.items()])
+                                        st.markdown(f"Đã phát hiện và hiển thị {summary_text} trong ảnh.")
                                 else:
                                     st.warning("Không phát hiện động vật nào trong ảnh!")
                                     st.markdown("""
