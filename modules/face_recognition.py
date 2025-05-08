@@ -10,157 +10,85 @@ def load_face_detector():
     from utils.face_utils import FaceDetector
     return FaceDetector("models/face_detection_yunet_2023mar.onnx")
 
-@st.cache_resource
+@st.cache_resource(ttl=10)  # Time to live: chỉ 10 giây để tải lại nhanh hơn
 def load_face_recognizer():
+    db_path = "data/db_embeddings.pkl"
+    # Thêm mtime làm tham số để Streamlit biết khi nào cần tải lại
+    db_mtime = os.path.getmtime(db_path) if os.path.exists(db_path) else 0
     from utils.face_utils import FaceRecognizer
-    return FaceRecognizer("models/face_recognition_sface_2021dec.onnx", "data/db_embeddings.pkl")
+    recognizer = FaceRecognizer("models/face_recognition_sface_2021dec.onnx", db_path)
+    print(f"Loaded face recognizer with database timestamp: {db_mtime}")
+    return recognizer
 
-class StableFaceTracker:
-    def __init__(self, max_distance: float = 50.0, min_frames: int = 5, max_missing_frames: int = 15):
-        self.tracked_faces: List[Dict] = []
-        self.max_distance = max_distance
-        self.min_frames = min_frames
-        self.max_missing_frames = max_missing_frames
-        
-    def update(self, detected_faces: np.ndarray, frame_num: int) -> List[Dict]:
-        """Update tracked faces with new detections"""
-        # If no detections, gradually remove tracked faces
-        if len(detected_faces) == 0:
-            # Remove faces that have been missing for too long
-            self.tracked_faces = [face for face in self.tracked_faces 
-                                if frame_num - face['last_seen'] < self.max_missing_frames]
-            
-            # Gradually decrease confidence for missing faces
-            for face in self.tracked_faces:
-                face['score'] *= 0.95  # Decay score each frame
-                face['frame_count'] = max(0, face['frame_count'] - 1)
-                if face['frame_count'] < self.min_frames:
-                    face['is_stable'] = False
-            
-            return self.tracked_faces
-        
-        # Track existing faces first
-        if len(self.tracked_faces) > 0:
-            # Mark all as unmatched initially
-            unmatched_tracked = list(range(len(self.tracked_faces)))
-            matched_new = set()
-            
-            # Find matches between new and tracked faces
-            for j, new_face in enumerate(detected_faces):
-                best_match_idx = None
-                min_dist = float('inf')
-                
-                for i in unmatched_tracked:
-                    tracked = self.tracked_faces[i]
-                    dist = self._calculate_distance(new_face[:4], tracked['box'])
-                    if dist < min_dist and dist < self.max_distance:
-                        min_dist = dist
-                        best_match_idx = i
-                
-                if best_match_idx is not None:
-                    # Update existing face
-                    tracked = self.tracked_faces[best_match_idx]
-                    tracked['box'] = self._smooth_box(tracked['box'], new_face[:4])
-                    tracked['score'] = 0.9 * tracked['score'] + 0.1 * new_face[4]
-                    tracked['frame_count'] += 1
-                    tracked['last_seen'] = frame_num
-                    
-                    # Mark as stable if seen for enough frames
-                    if tracked['frame_count'] >= self.min_frames:
-                        tracked['is_stable'] = True
-                    
-                    unmatched_tracked.remove(best_match_idx)
-                    matched_new.add(j)
-            
-            # Add new faces
-            for j, new_face in enumerate(detected_faces):
-                if j not in matched_new:
-                    self.tracked_faces.append({
-                        'box': new_face[:4],
-                        'score': new_face[4],
-                        'frame_count': 1,
-                        'last_seen': frame_num,
-                        'is_stable': False
-                    })
-        else:
-            # Add all detected faces as new
-            for new_face in detected_faces:
-                self.tracked_faces.append({
-                    'box': new_face[:4],
-                    'score': new_face[4],
-                    'frame_count': 1,
-                    'last_seen': frame_num,
-                    'is_stable': False
-                })
-        
-        # Remove old faces
-        self.tracked_faces = [face for face in self.tracked_faces 
-                            if frame_num - face['last_seen'] < self.max_missing_frames]
-        
-        return self.tracked_faces
-    
-    def _calculate_distance(self, box1: np.ndarray, box2: np.ndarray) -> float:
-        """Calculate distance between two face boxes"""
-        x1, y1, w1, h1 = box1
-        x2, y2, w2, h2 = box2
-        center1 = (x1 + w1/2, y1 + h1/2)
-        center2 = (x2 + w2/2, y2 + h2/2)
-        return np.sqrt((center1[0] - center2[0])**2 + (center1[1] - center2[1])**2)
-    
-    def _smooth_box(self, old_box: np.ndarray, new_box: np.ndarray, alpha: float = 0.3) -> np.ndarray:
-        """Smooth transition between box positions"""
-        return old_box * (1 - alpha) + new_box * alpha
-
-def draw_stable_results(frame: np.ndarray, stable_faces: List[Dict], 
-                       names: List[str] = None, scores: List[float] = None) -> np.ndarray:
-    """Draw detection and recognition results on the frame with stability (OPTIMIZED)"""
+def draw_results(frame: np.ndarray, faces: np.ndarray, names: List[str], 
+                scores: List[float]) -> np.ndarray:
+    """
+    Draw detection and recognition results on the frame - simplified version
+    Args:
+        frame: Input image frame
+        faces: Detected faces
+        names: Recognized names
+        scores: Recognition scores
+    Returns:
+        frame: Frame with results drawn
+    """
     result = frame.copy()
     
-    # Pre-calculate font settings
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.7
-    thickness = 2
-    
-    # Draw only stable faces
-    stable_index = 0
-    for face in stable_faces:
-        if not face['is_stable']:
+    # Draw each face with name and score
+    for i, face in enumerate(faces):
+        # Skip if index out of range
+        if i >= len(names) or i >= len(scores):
             continue
             
-        x, y, w, h = map(int, face['box'])
+        x, y, w, h = map(int, face[:4])
         
-        # Get name and score if available
-        name = names[stable_index] if names and stable_index < len(names) else None
-        score = scores[stable_index] if scores and stable_index < len(scores) else None
+        # Get name and score
+        name = names[i]
+        score = scores[i]
         
         # Choose color based on recognition status
-        color = (0, 255, 0)  # Green for both detected and recognized faces
-        text_color = (255, 255, 255)  # White text
+        if name == "Unknown":
+            color = (0, 0, 255)  # Red for unknown
+            text_color = (255, 255, 255)  # White text
+        else:
+            color = (0, 255, 0)  # Green for known
+            text_color = (255, 255, 255)  # White text
         
-        # Draw face rectangle (simpler draw method)
-        cv2.rectangle(result, (x, y), (x+w, y+h), color, 2)
+        # Xác định độ dày đường viền khung và cỡ chữ nhất quán
+        box_thickness = 2
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6  # Cố định font size để nhất quán
+        text_thickness = 2  # Cố định độ dày văn bản
         
-        # Draw label if available
-        if name is not None:
-            label = f"{name} ({score:.2f})" if score is not None else name
-            
-            # Get text size once
-            (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, thickness)
-            
-            # Calculate text position
-            text_y = y - 10 if y - 10 > 10 else y + h + 20
-            
-            # Draw text background (simpler rectangle)
-            cv2.rectangle(result, 
-                         (x, text_y - text_height - baseline), 
-                         (x + text_width + 5, text_y + baseline),
-                         color, cv2.FILLED)
-            
-            # Draw text
-            cv2.putText(result, label, (x + 2, text_y - 5),
-                        font, font_scale, text_color, thickness)
+        # Draw face rectangle với độ dày cố định
+        cv2.rectangle(result, (x, y), (x+w, y+h), color, box_thickness)
         
-        stable_index += 1
+        # Prepare text to display
+        label = f"{name} ({score:.2f})"
+        
+        # Calculate text size với thông số cố định
+        (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, text_thickness)
+        
+        # Tính toán vị trí text - đặt phía trên khung
+        margin = 5  # Margin giữa text và khung
+        text_x = x
+        text_y = max(y - margin, text_height + baseline)  # Đảm bảo text không bị cắt
+        
+        # Draw text background tách biệt với khung
+        cv2.rectangle(result, 
+                     (text_x, text_y - text_height - baseline - margin),
+                     (text_x + text_width + margin, text_y),
+                     color, 
+                     cv2.FILLED)
+        
+        # Draw text với độ dày cố định
+        cv2.putText(result, 
+                    label, 
+                    (text_x + margin//2, text_y - margin),
+                    font, 
+                    font_scale, 
+                    text_color, 
+                    text_thickness)
     
     return result
 
@@ -182,13 +110,10 @@ def show():
            - Training: Được huấn luyện trên dataset lớn với loss function đặc biệt giúp phân biệt tốt các khuôn mặt
            - Phương pháp: So sánh vector embedding với các vector trong cơ sở dữ liệu
         
-        Ứng dụng cũng tích hợp thuật toán theo dõi khuôn mặt (face tracking) để đảm bảo ổn định khi nhận dạng video thời gian thực, giảm hiện tượng "chớp nháy" khi xác định danh tính.
-        
         **Các tính năng chính:**
         - Nhận dạng khuôn mặt từ ảnh tĩnh (tải lên hoặc chụp từ webcam)
         - Nhận dạng khuôn mặt từ video tải lên (nhiều định dạng như MP4, AVI, MOV, v.v.)
         - Phát hiện và nhận dạng khuôn mặt từ webcam theo thời gian thực
-        - Theo dõi khuôn mặt ổn định giúp giảm đáng kể sai số trong nhận dạng
         
         **Ứng dụng thực tế:**
         - Hệ thống bảo mật và kiểm soát truy cập
@@ -267,18 +192,25 @@ def show():
                     faces, aligned_faces = face_detector.detect(img)
                     
                     if len(faces) > 0:
+                        # Sắp xếp khuôn mặt theo kích thước (lớn -> nhỏ)
+                        face_sizes = [f[2] * f[3] for f in faces]  # width * height
+                        sorted_indices = np.argsort(face_sizes)[::-1]  # Giảm dần
+                        
+                        sorted_faces = faces[sorted_indices]
+                        sorted_aligned_faces = [aligned_faces[i] for i in sorted_indices if i < len(aligned_faces)]
+                        
                         names = []
                         scores = []
                         
-                        # Recognize faces (limit to 5)
-                        for face_img in aligned_faces[:5]:
-                            name, score = face_recognizer.identify(face_img)
+                        # Nhận diện khuôn mặt (limit to 5)
+                        for face_img in sorted_aligned_faces[:5]:
+                            # Chỉ sử dụng ảnh gốc, loại bỏ phương pháp flip
+                            name, score = face_recognizer.identify(face_img, threshold=0.45)
                             names.append(name)
                             scores.append(score)
                         
-                        # Draw results
-                        from utils.face_utils import draw_results
-                        result_img = draw_results(img, faces[:5], names, scores)
+                        # Draw results - sử dụng hàm đơn giản hóa
+                        result_img = draw_results(img, sorted_faces[:5], names, scores)
                     else:
                         result_img = img  # No faces detected
                         names = []
@@ -319,18 +251,25 @@ def show():
                     faces, aligned_faces = face_detector.detect(img)
                     
                     if len(faces) > 0:
+                        # Sắp xếp khuôn mặt theo kích thước (lớn -> nhỏ)
+                        face_sizes = [f[2] * f[3] for f in faces]  # width * height
+                        sorted_indices = np.argsort(face_sizes)[::-1]  # Giảm dần
+                        
+                        sorted_faces = faces[sorted_indices]
+                        sorted_aligned_faces = [aligned_faces[i] for i in sorted_indices if i < len(aligned_faces)]
+                        
                         names = []
                         scores = []
                         
-                        # Recognize faces (limit to 5)
-                        for face_img in aligned_faces[:5]:
-                            name, score = face_recognizer.identify(face_img)
+                        # Nhận diện khuôn mặt (limit to 5)
+                        for face_img in sorted_aligned_faces[:5]:
+                            # Chỉ sử dụng ảnh gốc, loại bỏ phương pháp flip
+                            name, score = face_recognizer.identify(face_img, threshold=0.45)
                             names.append(name)
                             scores.append(score)
                         
-                        # Draw results
-                        from utils.face_utils import draw_results
-                        result_img = draw_results(img, faces[:5], names, scores)
+                        # Draw results - sử dụng hàm đơn giản hóa
+                        result_img = draw_results(img, sorted_faces[:5], names, scores)
                     else:
                         result_img = img  # No faces detected
                         names = []
@@ -381,7 +320,8 @@ def show():
                                     ["640x480", "800x600", "1280x720"],
                                     index=0)
         with col2:
-            process_rate = st.slider("Tốc độ xử lý:", 1, 6, 2, 1)
+            process_rate = st.slider("Tốc độ xử lý:", 1, 6, 2, 1,
+                                    help="Số frame bỏ qua giữa các lần xử lý (cao hơn = nhanh hơn)")
         
         # Parse resolution
         w, h = map(int, resolution.split('x'))
@@ -396,9 +336,6 @@ def show():
         # Initialize session state
         if 'video_running' not in st.session_state:
             st.session_state.video_running = False
-        
-        # Initialize face tracker (faster settings)
-        face_tracker = StableFaceTracker(max_distance=40.0, min_frames=2, max_missing_frames=8)
         
         # Video display area
         video_placeholder = st.empty()
@@ -436,16 +373,11 @@ def show():
                 video_placeholder.markdown("✅ Camera đã sẵn sàng")
                 time.sleep(0.5)  # Hiển thị thông báo trong 0.5 giây
                 
-                # FPS counter and frame processing counter
+                # FPS counter
                 fps_start_time = time.time()
                 fps_counter = 0
                 current_fps = 0
                 frame_num = 0
-                
-                # Initialize variable to track last processed frame
-                result_frame = None
-                names = []
-                scores = []
                 
                 while st.session_state.video_running:
                     ret, frame = cap.read()
@@ -462,41 +394,44 @@ def show():
                         # Detect faces
                         faces, aligned_faces = face_detector.detect(frame)
                         
-                        # Update face tracker
-                        stable_faces = face_tracker.update(faces, frame_num)
-                        
-                        # Only recognize stable faces
-                        stable_names = []
-                        stable_scores = []
-                        
-                        for face in stable_faces:
-                            if face['is_stable']:
-                                # Find corresponding aligned face (optimized matching)
-                                best_face_img = None
-                                min_dist = float('inf')
+                        # Nếu phát hiện các khuôn mặt, sắp xếp chúng theo kích thước
+                        if len(faces) > 0:
+                            face_sizes = [f[2] * f[3] for f in faces]  # width * height
+                            sorted_indices = np.argsort(face_sizes)[::-1]  # Giảm dần
+                            
+                            sorted_faces = faces[sorted_indices]
+                            sorted_aligned_faces = [aligned_faces[i] for i in sorted_indices if i < len(aligned_faces)]
+                            
+                            # Nhận diện khuôn mặt
+                            names = []
+                            scores = []
+                            
+                            for face_img in sorted_aligned_faces[:5]:  # Chỉ xử lý tối đa 5 khuôn mặt
+                                # Chỉ sử dụng ảnh gốc, loại bỏ phương pháp flip
+                                name, score = face_recognizer.identify(face_img, threshold=0.45)
+                                names.append(name)
+                                scores.append(score)
+                            
+                            # Vẽ kết quả
+                            display_frame = draw_results(frame, sorted_faces, names, scores)
+                            
+                            # Display recognition info
+                            if len(names) > 0:
+                                info_text = "### Khuôn mặt được nhận diện:\n\n"
                                 
-                                for i, detected_face in enumerate(faces):
-                                    # Simplified distance calculation
-                                    if i < len(aligned_faces):
-                                        dist = np.sum(np.abs(detected_face[:4] - face['box']))
-                                        if dist < min_dist:
-                                            min_dist = dist
-                                            best_face_img = aligned_faces[i]
+                                for i, (name, score) in enumerate(zip(names, scores)):
+                                    status = "✅ Đã nhận dạng" if name != "Unknown" else "❌ Không nhận dạng được"
+                                    info_text += f"**Người {i+1}:** {name} ({score:.2f}) - {status}\n\n"
                                 
-                                if best_face_img is not None:
-                                    name, score = face_recognizer.identify(best_face_img)
-                                    stable_names.append(name)
-                                    stable_scores.append(score)
-                        
-                        # Draw stable results (optimized function)
-                        result_frame = draw_stable_results(frame, stable_faces, stable_names, stable_scores)
-                        names = stable_names
-                        scores = stable_scores
+                                info_placeholder.markdown(info_text)
+                        else:
+                            display_frame = frame
+                            if frame_num % (process_rate * 5) == 0:
+                                info_placeholder.markdown("*Không phát hiện khuôn mặt nào*")
+                    else:
+                        display_frame = frame
                     
                     frame_num += 1
-                    
-                    # Use the last processed frame if available, otherwise use raw frame
-                    display_frame = result_frame if result_frame is not None else frame
                     
                     # Calculate FPS
                     fps_counter += 1
@@ -505,37 +440,13 @@ def show():
                         fps_counter = 0
                         fps_start_time = time.time()
                     
-                    # Add FPS text to frame (simplified drawing)
+                    # Add FPS text to frame
                     cv2.putText(display_frame, f"FPS: {current_fps}", (10, 30),
-                               cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                    
-                    # Convert to RGB for display only once
-                    display_frame_rgb = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
+                              cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                     
                     # Display frame
-                    video_placeholder.image(display_frame_rgb, channels="RGB", use_container_width=True)
-                    
-                    # Display recognition info (only show if needed)
-                    if frame_num % (process_rate * 2) == 0:  # Update info less frequently
-                        if names:
-                            with info_placeholder:
-                                # Count unique faces (only show green boxes count)
-                                stable_count = sum(1 for face in stable_faces if face['is_stable'])
-                                actual_people = min(stable_count, len(names))
-                                
-                                cols = st.columns(min(actual_people, 3))
-                                for i in range(actual_people):
-                                    if i < len(names) and i < len(scores):
-                                        with cols[i % 3]:
-                                            status = "✅ Đã nhận dạng" if names[i] != "Unknown" else "❌ Không nhận dạng được"
-                                            st.markdown(f"""
-                                            **Người {i+1}**  
-                                            {names[i]}  
-                                            Score: {scores[i]:.2f}  
-                                            {status}
-                                            """)
-                        else:
-                            info_placeholder.markdown("*Đang phát hiện khuôn mặt...*")
+                    video_placeholder.image(cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB), 
+                                          channels="RGB", use_container_width=True)
                     
                     # Check if stop button was pressed
                     if not st.session_state.video_running:
@@ -550,7 +461,7 @@ def show():
             ## 🎥 Chế độ Video Trực Tiếp
             
             **Tính năng:**
-            - Hiển thị khung khuôn mặt ổn định, không chớp nháy
+            - Hiển thị khuôn mặt trong thời gian thực
             - Tự động nhận dạng khuôn mặt trong thời gian thực
             - Hiển thị FPS để theo dõi hiệu suất
             
@@ -603,9 +514,9 @@ def process_video_realtime(video_file, face_detector, face_recognizer):
     with col1:
         confidence_threshold = st.slider(
             "Ngưỡng nhận diện:", 
-            min_value=0.5, 
+            min_value=0.4, 
             max_value=0.95, 
-            value=0.7, 
+            value=0.45, 
             step=0.05,
             help="Điều chỉnh độ nhạy khi nhận diện (cao hơn = ít nhận diện sai hơn)"
         )
@@ -618,13 +529,6 @@ def process_video_realtime(video_file, face_detector, face_recognizer):
             step=1,
             help="Số frame bỏ qua khi xử lý (cao hơn = nhanh hơn nhưng mất một số chi tiết)"
         )
-    
-    # Khởi tạo face tracker
-    face_tracker = StableFaceTracker(
-        max_distance=40.0,
-        min_frames=2,
-        max_missing_frames=10
-    )
     
     # Thông tin theo dõi
     stats = {
@@ -666,56 +570,50 @@ def process_video_realtime(video_file, face_detector, face_recognizer):
                     start_time = time.time()
                     faces, aligned_faces = face_detector.detect(frame)
                     
-                    # Update face tracking
-                    stable_faces = face_tracker.update(faces, frame_idx)
-                    
-                    # Nhận diện các khuôn mặt ổn định
-                    stable_names = []
-                    stable_scores = []
-                    
+                    # Sắp xếp khuôn mặt theo kích thước (lớn -> nhỏ)
                     if len(faces) > 0:
+                        face_sizes = [f[2] * f[3] for f in faces]  # width * height
+                        sorted_indices = np.argsort(face_sizes)[::-1]  # Giảm dần
+                        
+                        sorted_faces = faces[sorted_indices]
+                        sorted_aligned_faces = [aligned_faces[i] for i in sorted_indices if i < len(aligned_faces)]
+                        
+                        names = []
+                        scores = []
+                        
                         stats['total_faces'] += len(faces)
                         
-                        for face in stable_faces:
-                            if face['is_stable']:
-                                # Tìm aligned face tương ứng
-                                best_face_img = None
-                                min_dist = float('inf')
+                        # Nhận diện khuôn mặt (tối đa 5 khuôn mặt)
+                        for face_img in sorted_aligned_faces[:5]:
+                            # Chỉ sử dụng ảnh gốc, không còn phương pháp flip
+                            name, score = face_recognizer.identify(face_img, threshold=confidence_threshold)
+                            
+                            # Cập nhật thống kê
+                            if name != "Unknown":
+                                stats['identified_faces'] += 1
+                                stats['people_detected'].add(name)
+                                stats['people_frames'][name] = stats['people_frames'].get(name, 0) + 1
+                            else:
+                                stats['unknown_faces'] += 1
                                 
-                                for i, detected_face in enumerate(faces):
-                                    if i < len(aligned_faces):
-                                        dist = np.sum(np.abs(detected_face[:4] - face['box']))
-                                        if dist < min_dist:
-                                            min_dist = dist
-                                            best_face_img = aligned_faces[i]
-                                
-                                if best_face_img is not None:
-                                    name, score = face_recognizer.identify(best_face_img)
-                                    
-                                    # Áp dụng ngưỡng tin cậy
-                                    if score < confidence_threshold:
-                                        name = "Unknown"
-                                        stats['unknown_faces'] += 1
-                                    else:
-                                        stats['identified_faces'] += 1
-                                        stats['people_detected'].add(name)
-                                        # Đếm số frame mỗi người xuất hiện
-                                        stats['people_frames'][name] = stats['people_frames'].get(name, 0) + 1
-                                    
-                                    stable_names.append(name)
-                                    stable_scores.append(score)
-                    
-                    # Vẽ kết quả
-                    result_frame = draw_stable_results(frame, stable_faces, stable_names, stable_scores)
+                            names.append(name)
+                            scores.append(score)
+                        
+                        # Vẽ kết quả
+                        result_frame = draw_results(frame, sorted_faces, names, scores)
+                    else:
+                        result_frame = frame
+                        names = []
+                        scores = []
                     
                     # Tính thời gian xử lý
                     process_time = time.time() - start_time
-                    fps_text = f"Processing: {1/process_time:.1f} FPS"
+                    processing_fps = 1/process_time if process_time > 0 else 0
                     
-                    # Thêm thông tin vào frame
+                    # Thêm thông tin vào khung hình
                     cv2.putText(
                         result_frame, 
-                        fps_text, 
+                        f"Processing: {processing_fps:.1f} FPS", 
                         (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
                     )
@@ -730,7 +628,7 @@ def process_video_realtime(video_file, face_detector, face_recognizer):
                     )
                     
                     # Gửi kết quả vào queue
-                    result_queue.put((result_frame, stable_names, stable_scores, current_pos))
+                    result_queue.put((result_frame, names, scores, current_pos))
                     processed_idx += 1
                 
                 frame_queue.task_done()
