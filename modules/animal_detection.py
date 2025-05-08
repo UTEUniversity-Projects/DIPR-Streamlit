@@ -111,18 +111,9 @@ def show():
         5. Khởi động lại ứng dụng
         """)
         
-        # Cung cấp phần download model mẫu
-        st.markdown("### Tải xuống model mẫu")
-        st.markdown("""
-        Bạn có thể tải model mẫu từ các nguồn sau:
-        - [Roboflow Universe - Animal Detection](https://universe.roboflow.com/animal-detection-using-yolov8/animal-detection-using-yolov8)
-        - [Hugging Face - YOLOv8 Animal Detection](https://huggingface.co/models?search=yolov8+animal)
-        
-        Sau khi tải xuống, hãy đổi tên và đặt file vào thư mục `models/animal_detection.pt`
-        """)
     else:
         # Upload image
-        uploaded_file = st.file_uploader("Chọn ảnh chứa động vật", type=["jpg", "jpeg", "png", "webp", "avif"])
+        uploaded_file = st.file_uploader("Chọn ảnh chứa động vật", type=["jpg", "jpeg", "png", "webp", "jfif", "avif"])
         
         if uploaded_file is not None:
             # Safe image loading with error handling
