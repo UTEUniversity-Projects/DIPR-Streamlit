@@ -113,7 +113,7 @@ def show():
         
     else:
         # Upload image
-        uploaded_file = st.file_uploader("Chọn ảnh chứa động vật", type=["jpg", "jpeg", "png", "webp", "jfif", "avif"])
+        uploaded_file = st.file_uploader("Chọn ảnh chứa động vật", type=["jpg", "jpeg", "png", "webp", "jfif", "tif", "tiff"])
         
         if uploaded_file is not None:
             # Safe image loading with error handling

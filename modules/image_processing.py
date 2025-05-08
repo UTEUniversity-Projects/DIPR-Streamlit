@@ -112,7 +112,7 @@ def show():
     )
     
     # Thêm hỗ trợ cho định dạng TIFF
-    uploaded_file = st.file_uploader("Chọn ảnh để xử lý", type=["jpg", "jpeg", "png", "webp", "avif", "tif", "tiff"])
+    uploaded_file = st.file_uploader("Chọn ảnh để xử lý", type=["jpg", "jpeg", "png", "webp", "jfif", "tif", "tiff"])
     
     if uploaded_file is not None:
         # Kiểm tra định dạng file

@@ -19,7 +19,7 @@ class AnimalDetector:
         # These will be overridden by actual classes from the model
         self.class_names = {
             0: "Dog",
-            1: "Cat", 
+            1: "Cat",
             2: "Bird",
             3: "Horse",
             4: "Cow",
