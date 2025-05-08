@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 
 class FaceDetector:
-    def __init__(self, model_path: str, score_threshold: float = 0.9, nms_threshold: float = 0.6):
+    def __init__(self, model_path: str, score_threshold: float = 0.9, nms_threshold: float = 0.3):
         """
         Initialize YuNet face detector
         Args:
@@ -23,14 +23,18 @@ class FaceDetector:
             nms_threshold,
             5000  # Top K
         )
+        # Caching frame size to avoid unnecessary setInputSize calls
+        self._last_frame_size = None
     
     def setInputSize(self, input_size: Tuple[int, int]):
-        """Set input size for the detector"""
-        self.model.setInputSize(input_size)
+        """Set input size for the detector only if it changed"""
+        if self._last_frame_size != input_size:
+            self.model.setInputSize(input_size)
+            self._last_frame_size = input_size
         
     def detect(self, frame: np.ndarray) -> Tuple[np.ndarray, List[np.ndarray]]:
         """
-        Detect faces in the input frame
+        Detect faces in the input frame - optimized version
         Args:
             frame: Input image frame
         Returns:
@@ -48,39 +52,41 @@ class FaceDetector:
         if faces is None:
             return np.array([]), []
         
-        # Process detected faces
+        # Process detected faces - optimized with vectorization
         aligned_faces = []
-        for face in faces:
-            # Extract face box coordinates and convert to int
-            x, y, w, h = map(int, face[:4])
-            
-            # Add padding to make the crop more square
-            # Calculate square size
-            size = max(w, h)
-            padding = int(size * 0.1)  # 10% padding
-            size += padding * 2
-            
-            # Calculate center and new coordinates
-            center_x = x + w // 2
-            center_y = y + h // 2
-            
-            x_new = center_x - size // 2
-            y_new = center_y - size // 2
-            
-            # Make sure coordinates are within bounds
-            x_new = max(0, x_new)
-            y_new = max(0, y_new)
-            x2_new = min(x_new + size, frame.shape[1])
-            y2_new = min(y_new + size, frame.shape[0])
-            
-            # Ensure we have a valid face crop
-            if x2_new > x_new and y2_new > y_new:
-                aligned_face = frame[y_new:y2_new, x_new:x2_new]
+        
+        # Thêm padding cho tất cả khuôn mặt cùng lúc
+        padding_ratio = 0.1  # 10% padding
+        x_coords = faces[:, 0].astype(int)
+        y_coords = faces[:, 1].astype(int)
+        widths = faces[:, 2].astype(int)
+        heights = faces[:, 3].astype(int)
+        
+        # Tính toán kích thước cân bằng
+        sizes = np.maximum(widths, heights)
+        paddings = (sizes * padding_ratio).astype(int)
+        sizes += paddings * 2
+        
+        # Tính tọa độ tâm
+        center_x = x_coords + widths // 2
+        center_y = y_coords + heights // 2
+        
+        # Tính tọa độ mới với padding
+        x_new = np.maximum(0, center_x - sizes // 2)
+        y_new = np.maximum(0, center_y - sizes // 2)
+        x2_new = np.minimum(x_new + sizes, w)
+        y2_new = np.minimum(y_new + sizes, h)
+        
+        # Crop và resize cho mỗi khuôn mặt
+        for i in range(len(faces)):
+            # Đảm bảo kích thước crop hợp lệ
+            if x2_new[i] > x_new[i] and y2_new[i] > y_new[i]:
+                aligned_face = frame[y_new[i]:y2_new[i], x_new[i]:x2_new[i]]
                 
-                # Check if the cropped face is valid and resize
+                # Kiểm tra nếu crop thành công
                 if aligned_face.size > 0:
-                    # Resize to 112x112 for SFace model
-                    aligned_face = cv2.resize(aligned_face, (112, 112))
+                    # Resize hiệu quả với interpolation=cv2.INTER_AREA cho tốc độ tốt hơn
+                    aligned_face = cv2.resize(aligned_face, (112, 112), interpolation=cv2.INTER_AREA)
                     aligned_faces.append(aligned_face)
         
         return faces, aligned_faces
@@ -101,21 +107,42 @@ class FaceRecognizer:
         self.database = {}
         if database_path and os.path.exists(database_path):
             self.load_database(database_path)
+            
+        # Cache cho vectors đã trích xuất để tránh tính toán lặp lại
+        self.feature_cache = {}
     
     def get_feature(self, face_img: np.ndarray) -> np.ndarray:
         """
-        Extract face feature from aligned face image
+        Extract face feature from aligned face image with caching
         Args:
             face_img: Aligned face image
         Returns:
             feature: Face feature embedding vector
         """
+        # Create a hash key for this image
+        img_hash = hash(face_img.tobytes())
+        
+        # Return cached feature if available
+        if img_hash in self.feature_cache:
+            return self.feature_cache[img_hash]
+            
         # Make sure the face image is properly sized for the model
-        face_img = cv2.resize(face_img, (112, 112))
+        if face_img.shape[:2] != (112, 112):
+            face_img = cv2.resize(face_img, (112, 112), interpolation=cv2.INTER_AREA)
+            
         # Extract face feature
         feature = self.model.feature(face_img)
         # Normalize feature vector
         feature = normalize(feature.reshape(1, -1))[0]
+        
+        # Cache the result
+        self.feature_cache[img_hash] = feature
+        
+        # Limit cache size to prevent memory leaks
+        if len(self.feature_cache) > 1000:
+            # Remove a random item when cache gets too large
+            self.feature_cache.pop(next(iter(self.feature_cache)))
+            
         return feature
     
     def match(self, feature1: np.ndarray, feature2: np.ndarray) -> float:
@@ -156,7 +183,7 @@ class FaceRecognizer:
         Identify person from face image
         Args:
             face_img: Aligned face image
-            threshold: Recognition threshold
+            threshold: Recognition threshold (raised to 0.6)
         Returns:
             name: Person name or "Unknown"
             score: Confidence score
@@ -191,7 +218,7 @@ class FaceRecognizer:
         Identify person from face image, trying both original and flipped versions
         Args:
             face_img: Aligned face image
-            threshold: Recognition threshold
+            threshold: Recognition threshold (raised to 0.6)
         Returns:
             name: Person name or "Unknown"
             score: Confidence score
@@ -246,286 +273,6 @@ class FaceRecognizer:
             print(f"Error loading database: {e}")
             return False
 
-def capture_face_samples(detector: FaceDetector, output_dir: str, 
-                         person_name: str, num_samples: int = 100, 
-                         delay_frames: int = 3) -> bool:
-    """
-    Capture face samples from webcam
-    Args:
-        detector: Face detector object
-        output_dir: Output directory for face images
-        person_name: Name of the person
-        num_samples: Number of samples to capture
-        delay_frames: Number of frames to skip between captures
-    Returns:
-        success: Whether capture was successful
-    """
-    # Create person directory if it doesn't exist
-    person_dir = os.path.join(output_dir, person_name)
-    os.makedirs(person_dir, exist_ok=True)
-    
-    # Initialize webcam
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("Error: Could not open webcam")
-        return False
-    
-    # Counter variables
-    count = 0
-    frame_count = 0
-    
-    print(f"Starting capture for {person_name}. Press 'q' to quit.")
-    
-    while count < num_samples:
-        ret, frame = cap.read()
-        if not ret:
-            print("Error: Failed to capture frame")
-            break
-        
-        # Flip the frame horizontally for a more natural view
-        frame = cv2.flip(frame, 1)
-        
-        # Detect faces
-        faces, aligned_faces = detector.detect(frame)
-        
-        # Draw detected faces
-        if len(faces) > 0:
-            for face in faces:
-                x, y, w, h = map(int, face[:4])
-                confidence = face[4]
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                cv2.putText(frame, f"Confidence: {confidence:.2f}", (x, y-10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        
-        # Display instructions and count
-        cv2.putText(frame, f"Captured: {count}/{num_samples}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        cv2.putText(frame, "Press 'q' to quit", (10, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        
-        # Display the frame
-        cv2.imshow("Face Capture", frame)
-        
-        # Process key press
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
-            break
-        
-        # Save face if detected
-        frame_count += 1
-        if frame_count % delay_frames == 0 and len(aligned_faces) > 0:
-            # Save the first face detected
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-            filename = os.path.join(person_dir, f"{count:04d}_{timestamp}.jpg")
-            cv2.imwrite(filename, aligned_faces[0])
-            count += 1
-            print(f"Saved {count}/{num_samples}")
-    
-    # Release the webcam and close windows
-    cap.release()
-    cv2.destroyAllWindows()
-    
-    print(f"Captured {count} samples for {person_name}")
-    return count > 0
-
-def capture_face_samples_interactive(detector: FaceDetector, output_dir: str, 
-                                   person_name: str, num_samples: int = 100) -> bool:
-    """
-    Capture face samples with keyboard controls:
-    - Press 's' to start/resume capturing
-    - Press 'p' to pause capturing  
-    - Press 'q' to quit
-    - Continues until 100 samples or manually stopped
-    """
-    # Create person directory if it doesn't exist
-    person_dir = os.path.join(output_dir, person_name)
-    os.makedirs(person_dir, exist_ok=True)
-    
-    # Initialize webcam
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("Error: Could not open webcam")
-        return False
-    
-    # State variables
-    count = 0
-    capturing = False
-    frame_count = 0
-    delay_frames = 3
-    
-    # Set camera resolution for consistent UI layout
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-    
-    print(f"Interactive face capture for {person_name}")
-    print("Controls:")
-    print("  's' - Start/Resume capturing")
-    print("  'p' - Pause capturing") 
-    print("  'q' - Quit")
-    print("Tips:")
-    print("  - Keep face centered and well-lit")
-    print("  - Turn head slightly for different angles")
-    
-    while count < num_samples:
-        ret, frame = cap.read()
-        if not ret:
-            print("Error: Failed to capture frame")
-            break
-        
-        # Flip the frame horizontally
-        frame = cv2.flip(frame, 1)
-        h, w = frame.shape[:2]
-        
-        # Create capture zone (larger area) with better positioning
-        zone_width = min(int(w * 0.5), 640)  # Max 640px wide
-        zone_height = min(int(h * 0.5), 480)  # Max 480px high
-        zone_x = max(0, int(w * 0.25))  # Centered
-        zone_y = max(0, int(h * 0.25))  # Centered
-        
-        # Create a region for text overlays
-        text_region = frame.copy()
-        
-        # Draw capture zone on the main frame
-        cv2.rectangle(frame, (zone_x, zone_y), 
-                     (zone_x + zone_width, zone_y + zone_height), 
-                     (0, 255, 0), 3)
-        
-        # Detect faces
-        faces, _ = detector.detect(frame)
-        
-        best_face = None
-        face_to_save = None
-        
-        # Process detected faces
-        if len(faces) > 0:
-            for face in faces:
-                x, y, w_face, h_face = map(int, face[:4])
-                
-                # Draw face rectangle in blue (for display only)
-                cv2.rectangle(frame, (x, y), (x+w_face, y+h_face), (255, 0, 0), 2)
-                
-                # Draw face center
-                face_center_x = x + w_face // 2
-                face_center_y = y + h_face // 2
-                cv2.circle(frame, (face_center_x, face_center_y), 5, (255, 0, 0), -1)
-                
-                # Select best face (largest)
-                if best_face is None or w_face * h_face > best_face[2] * best_face[3]:
-                    best_face = (x, y, w_face, h_face)
-                    
-                    # Crop face area from ORIGINAL frame (without rectangles) for saving
-                    padding = int(max(w_face, h_face) * 0.2)  # 20% padding
-                    x1 = max(0, x - padding)
-                    y1 = max(0, y - padding)
-                    x2 = min(w, x + w_face + padding)
-                    y2 = min(h, y + h_face + padding)
-                    
-                    # Get clean frame without rectangles
-                    ret, clean_frame = cap.read()
-                    clean_frame = cv2.flip(clean_frame, 1)
-                    
-                    face_crop = clean_frame[y1:y2, x1:x2].copy()
-                    
-                    # Resize to standard size
-                    face_to_save = cv2.resize(face_crop, (112, 112))
-        
-        # Create text background to prevent overlap
-        text_bg = np.zeros((150, w, 3), dtype=np.uint8)
-        text_bg[:, :] = (50, 50, 50)  # Dark gray background
-        
-        # Status text
-        status = "CAPTURING" if capturing else "PAUSED"
-        color = (0, 255, 0) if capturing else (0, 0, 255)
-        
-        # Add text to background
-        cv2.putText(text_bg, f"Status: {status}", (20, 35),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
-        cv2.putText(text_bg, f"Count: {count}/{num_samples}", (20, 70),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        
-        # Face detection status
-        if len(faces) > 0:
-            cv2.putText(text_bg, f"Faces detected: {len(faces)}", (20, 105),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-        else:
-            cv2.putText(text_bg, "No face detected", (20, 105),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-        
-        # Add text background to frame
-        combined = frame.copy()
-        combined[0:150, :] = text_bg
-        
-        # Control instructions at the bottom (with background)
-        bottom_text_bg = np.zeros((40, w, 3), dtype=np.uint8)
-        bottom_text_bg[:, :] = (50, 50, 50)  # Dark gray background
-        
-        cv2.putText(bottom_text_bg, "Press 's' to start, 'p' to pause, 'q' to quit", (20, 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        
-        # Add bottom text to frame
-        combined[h-40:h, :] = bottom_text_bg
-        
-        # Show the frame
-        cv2.imshow(f"Face Capture - {person_name}", combined)
-        
-        # Process keyboard input
-        key = cv2.waitKey(1) & 0xFF
-        
-        if key == ord('s'):
-            capturing = True
-            print(f"Started capturing... ({count}/{num_samples})")
-        elif key == ord('p'):
-            capturing = False
-            print(f"Paused capturing ({count}/{num_samples})")
-        elif key == ord('q'):
-            print(f"Quitting... Captured {count} images")
-            break
-        
-        # Save face if capturing is active and we have a face
-        if capturing and face_to_save is not None:
-            frame_count += 1
-            if frame_count % delay_frames == 0:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                filename = os.path.join(person_dir, f"{count:04d}_{timestamp}.jpg")
-                cv2.imwrite(filename, face_to_save)
-                count += 1
-                print(f"Captured {count}/{num_samples} images")
-                
-                # Don't auto-pause, let user control manually
-                # Notify every 10 images
-                if count % 10 == 0 and count < num_samples:
-                    print(f"Progress: {count} images captured. Press 'p' to pause, 's' to continue, 'q' to quit.")
-    
-    # Cleanup
-    cap.release()
-    cv2.destroyAllWindows()
-    
-    print(f"\nCompleted! Captured {count} samples for {person_name}")
-    return count > 0
-
-def enhance_face_image(face_img: np.ndarray) -> np.ndarray:
-    """
-    Enhance face image for better recognition
-    """
-    # Resize to standard size
-    face_img = cv2.resize(face_img, (112, 112))
-    
-    # Apply histogram equalization
-    if len(face_img.shape) == 2:  # Grayscale
-        face_img = cv2.equalizeHist(face_img)
-    else:  # Color
-        # Convert to LAB and equalize L channel
-        lab = cv2.cvtColor(face_img, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        l = cv2.equalizeHist(l)
-        lab = cv2.merge([l, a, b])
-        face_img = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-    
-    # Apply slight blur to reduce noise
-    face_img = cv2.GaussianBlur(face_img, (3, 3), 0)
-    
-    return face_img
-
 def build_face_database(detector: FaceDetector, recognizer: FaceRecognizer, 
                        faces_dir: str, database_path: str) -> int:
     """
@@ -554,7 +301,7 @@ def build_face_database(detector: FaceDetector, recognizer: FaceRecognizer,
         for img_file in os.listdir(person_dir):
             img_path = os.path.join(person_dir, img_file)
             
-            # Skip non-image files
+            # Skip non-image files - UPDATED TO INCLUDE BMP
             if not img_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
                 continue
             
@@ -596,6 +343,10 @@ def draw_results(frame: np.ndarray, faces: np.ndarray, names: List[str],
     
     # Draw each face with name and score
     for i, face in enumerate(faces):
+        # Skip faces with low confidence scores
+        if i >= len(scores) or scores[i] < 0.6:
+            continue
+            
         x, y, w, h = map(int, face[:4])
         
         # Get name
@@ -605,35 +356,204 @@ def draw_results(frame: np.ndarray, faces: np.ndarray, names: List[str],
         # Choose color based on recognition status
         if name == "Unknown":
             color = (0, 0, 255)  # Red for unknown
-            text_color = (0, 0, 255)
+            text_color = (255, 255, 255)
         else:
             color = (0, 255, 0)  # Green for known
-            text_color = (0, 255, 0)
+            text_color = (255, 255, 255)
         
-        # Draw face rectangle
-        cv2.rectangle(result, (x, y), (x+w, y+h), color, 2)
+        # Optimized drawing
+        # Draw face rectangle with optimized line thickness based on face size
+        thickness = max(1, min(2, w // 100))
+        cv2.rectangle(result, (x, y), (x+w, y+h), color, thickness)
         
         # Prepare text to display
         label = f"{name} ({score:.2f})"
         
         # Calculate text size and position
         font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.7
-        thickness = 2
+        font_scale = 0.5 + 0.0015 * w  # Dynamic font size based on face width
+        thickness = max(1, min(2, w // 150))
         (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, thickness)
         
-        # Create background rectangle for text
-        text_y = y - 10 if y - 10 > 0 else y + h + 20
+        # Ensure text is positioned correctly
+        text_y = max(text_height + 10, y - 10) if y - text_height - 10 < 0 else y - 10
         
-        # Draw text background
+        # Draw text background more efficiently
         cv2.rectangle(result, 
-                     (x, text_y - text_height - baseline), 
-                     (x + text_width + 5, text_y + baseline),
+                     (x, text_y - text_height - baseline),
+                     (x + text_width, text_y + baseline // 2),
                      color, 
                      cv2.FILLED)
         
-        # Draw text (name and score)
-        cv2.putText(result, label, (x + 2, text_y - 5),
-                    font, font_scale, (255, 255, 255), thickness)
+        # Draw text
+        cv2.putText(result, label, (x, text_y),
+                    font, font_scale, text_color, thickness)
+    
+    return result
+    
+# Function for tracking and stabilizing face detection
+class StableFaceTracker:
+    def __init__(self, max_distance: float = 50.0, min_frames: int = 4, max_missing_frames: int = 10):
+        self.tracked_faces = []
+        self.max_distance = max_distance
+        self.min_frames = min_frames
+        self.max_missing_frames = max_missing_frames
+        
+    def update(self, detected_faces: np.ndarray, frame_num: int) -> List[Dict]:
+        """Update tracked faces with new detections - optimized version"""
+        # If no detections, gradually remove tracked faces
+        if len(detected_faces) == 0:
+            # Remove faces that have been missing for too long
+            self.tracked_faces = [face for face in self.tracked_faces 
+                                if frame_num - face['last_seen'] < self.max_missing_frames]
+            
+            # Gradually decrease confidence for missing faces
+            for face in self.tracked_faces:
+                face['score'] *= 0.9  # Decay score each frame
+                face['frame_count'] = max(0, face['frame_count'] - 1)
+                face['is_stable'] = face['frame_count'] >= self.min_frames
+            
+            return self.tracked_faces
+        
+        # Track existing faces
+        if len(self.tracked_faces) > 0:
+            # Mark all as unmatched initially
+            unmatched_tracked = list(range(len(self.tracked_faces)))
+            matched_new = set()
+            
+            # Precompute centers for performance
+            track_centers = np.array([
+                [t['box'][0] + t['box'][2]/2, t['box'][1] + t['box'][3]/2]
+                for t in self.tracked_faces
+            ])
+            
+            new_centers = np.array([
+                [d[0] + d[2]/2, d[1] + d[3]/2]
+                for d in detected_faces
+            ])
+            
+            # Find matches using vectorized distance calculation
+            for j, new_center in enumerate(new_centers):
+                # Calculate distances to all tracked faces at once
+                distances = np.sqrt(np.sum((track_centers - new_center)**2, axis=1))
+                
+                # Find closest match below threshold
+                valid_indices = [i for i, d in enumerate(distances) 
+                               if i in unmatched_tracked and d < self.max_distance]
+                
+                if valid_indices:
+                    best_match_idx = valid_indices[np.argmin(distances[valid_indices])]
+                    
+                    # Update existing face
+                    tracked = self.tracked_faces[best_match_idx]
+                    new_box = detected_faces[j][:4]
+                    
+                    # Use exponential smoothing for box position
+                    alpha = 0.3
+                    tracked['box'] = tracked['box'] * (1 - alpha) + new_box * alpha
+                    tracked['score'] = 0.9 * tracked['score'] + 0.1 * detected_faces[j][4]
+                    tracked['frame_count'] += 1
+                    tracked['last_seen'] = frame_num
+                    
+                    # Mark as stable if seen for enough frames
+                    tracked['is_stable'] = tracked['frame_count'] >= self.min_frames
+                    
+                    unmatched_tracked.remove(best_match_idx)
+                    matched_new.add(j)
+            
+            # Add new faces
+            for j, new_face in enumerate(detected_faces):
+                if j not in matched_new:
+                    self.tracked_faces.append({
+                        'box': new_face[:4].copy(),
+                        'score': new_face[4],
+                        'frame_count': 1,
+                        'last_seen': frame_num,
+                        'is_stable': False
+                    })
+        else:
+            # Add all detected faces as new
+            for new_face in detected_faces:
+                self.tracked_faces.append({
+                    'box': new_face[:4].copy(),
+                    'score': new_face[4],
+                    'frame_count': 1,
+                    'last_seen': frame_num,
+                    'is_stable': False
+                })
+        
+        # Remove old faces
+        self.tracked_faces = [face for face in self.tracked_faces 
+                            if frame_num - face['last_seen'] < self.max_missing_frames]
+        
+        return self.tracked_faces
+
+def draw_stable_results(frame: np.ndarray, stable_faces: List[Dict], 
+                       names: List[str] = None, scores: List[float] = None) -> np.ndarray:
+    """
+    Draw detection and recognition results on the frame with stability (OPTIMIZED)
+    Args:
+        frame: Input image frame
+        stable_faces: List of stable face dictionaries
+        names: Recognized names
+        scores: Recognition scores
+    Returns:
+        result: Frame with results drawn
+    """
+    result = frame.copy()
+    
+    # Pre-calculate font settings
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    
+    # Draw only stable faces with good scores
+    stable_index = 0
+    for face in stable_faces:
+        if not face['is_stable']:
+            continue
+            
+        # Skip faces with low confidence scores
+        current_score = scores[stable_index] if scores and stable_index < len(scores) else 0
+        if current_score < 0.6:
+            stable_index += 1
+            continue
+            
+        x, y, w, h = map(int, face['box'])
+        
+        # Get name and score if available
+        name = names[stable_index] if names and stable_index < len(names) else None
+        score = scores[stable_index] if scores and stable_index < len(scores) else None
+        
+        # Choose color based on recognition status
+        color = (0, 255, 0) if name and name != "Unknown" else (0, 0, 255)
+        text_color = (255, 255, 255)  # White text
+        
+        # Dynamic sizing based on face size
+        thickness = max(1, min(2, w // 100))
+        font_scale = max(0.5, min(0.9, w / 200))
+        
+        # Draw face rectangle (optimized drawing)
+        cv2.rectangle(result, (x, y), (x+w, y+h), color, thickness)
+        
+        # Draw label if available
+        if name is not None:
+            label = f"{name} ({score:.2f})" if score is not None else name
+            
+            # Get text size once
+            (text_width, text_height), baseline = cv2.getTextSize(label, font, font_scale, thickness)
+            
+            # Calculate text position
+            text_y = y - 10 if y - 10 > 10 else y + h + 20
+            
+            # Draw text background (optimized)
+            cv2.rectangle(result, 
+                         (x, text_y - text_height - baseline),
+                         (x + text_width + 5, text_y + baseline // 2),
+                         color, cv2.FILLED)
+            
+            # Draw text
+            cv2.putText(result, label, (x + 2, text_y - 5),
+                        font, font_scale, text_color, thickness)
+        
+        stable_index += 1
     
     return result
