@@ -349,326 +349,28 @@ def show():
                             st.write(f"**Người {i+1}:** {name} ({score:.2f}) - {status}")
                     else:
                         st.warning("Không phát hiện khuôn mặt nào trong ảnh!")
-    
+        
     elif mode == "🎬 Video tải lên":
-        # Video upload section
+        # Video upload section with improved explanation
         st.subheader("Nhận dạng khuôn mặt từ video")
         
-        # Upload video file
-        video_file = st.file_uploader("Tải lên video", type=["mp4", "mov", "avi", "mkv", "wmv"])
+        # Add helpful explanation
+        st.markdown("""
+        Tính năng này cho phép nhận dạng khuôn mặt từ file video tải lên.
+        Quá trình xử lý sẽ diễn ra theo thời gian thực - bạn sẽ thấy kết quả ngay khi video đang chạy!
+        """)
+        
+        # Upload video file with clearer instructions
+        video_file = st.file_uploader(
+            "Tải lên video chứa khuôn mặt cần nhận dạng", 
+            type=["mp4", "mov", "avi", "mkv", "wmv"],
+            help="Hỗ trợ các định dạng: MP4, MOV, AVI, MKV, WMV. Nên sử dụng video MP4 để có hiệu suất tốt nhất."
+        )
         
         if video_file is not None:
-            # Save uploaded video to a temporary file
-            temp_video_path = f"temp_video_{int(time.time())}.mp4"
-            with open(temp_video_path, "wb") as f:
-                f.write(video_file.getbuffer())
-                
-            # Get video info
-            cap = cv2.VideoCapture(temp_video_path)
-            if not cap.isOpened():
-                st.error("Không thể đọc video. Vui lòng thử lại với định dạng khác.")
-            else:
-                # Get video properties
-                frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                fps = cap.get(cv2.CAP_PROP_FPS)
-                
-                # Display video info
-                st.info(f"Thông tin video: {frame_width}x{frame_height}, {fps:.1f} FPS, {frame_count} frames")
-                
-                # Video processing options
-                col1, col2 = st.columns(2)
-                with col1:
-                    process_mode = st.radio(
-                        "Chế độ xử lý:",
-                        ["Nhanh (Skip frames)", "Chất lượng cao (Full frames)"],
-                        index=0
-                    )
-                with col2:
-                    result_mode = st.radio(
-                        "Hiển thị kết quả:",
-                        ["Từng frame", "Video hoàn chỉnh"],
-                        index=1
-                    )
-                
-                # Skip frames for faster processing
-                if process_mode == "Nhanh (Skip frames)":
-                    # For long videos, skip more frames
-                    if frame_count > 1000:
-                        frame_skip = 10
-                    elif frame_count > 500:
-                        frame_skip = 5
-                    else:
-                        frame_skip = 2
-                else:
-                    frame_skip = 1
-                
-                # Initialize face tracker for more stable results
-                face_tracker = StableFaceTracker(max_distance=40.0, min_frames=2, max_missing_frames=8)
-                
-                # Process video button
-                if st.button("Bắt đầu xử lý video", type="primary", use_container_width=True):
-                    # Create progress bar and status containers
-                    progress_container = st.container()
-                    with progress_container:
-                        progress_bar = st.progress(0)
-                        status_text = st.empty()
-                        time_remaining = st.empty()
-                    
-                    # Container for results
-                    result_container = st.empty()
-                    info_container = st.empty()
-                    
-                    # If full video output is selected, prepare output video
-                    if result_mode == "Video hoàn chỉnh":
-                        # Create temporary output video file
-                        output_video_path = f"temp_output_{int(time.time())}.mp4"
-                        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                        out = cv2.VideoWriter(output_video_path, fourcc, fps, (frame_width, frame_height))
-                    
-                    # Process video frames
-                    frame_idx = 0
-                    processed_frames = 0
-                    all_results = []  # List to store [frame_idx, faces, names, scores]
-                    
-                    # Tracking variables for stats
-                    total_faces_detected = 0
-                    identified_faces = 0
-                    unknown_faces = 0
-                    people_detected = set()
-                    people_frame_counts = {}  # Track how many frames each person appears in
-                    
-                    # Time tracking for ETA calculation
-                    start_time = time.time()
-                    frames_processed_for_time = 0
-                    processing_fps = 0
-                    
-                    try:
-                        while True:
-                            ret, frame = cap.read()
-                            if not ret:
-                                break
-                                
-                            # Process every Nth frame
-                            if frame_idx % frame_skip == 0:
-                                # Calculate ETA based on current processing speed
-                                frames_processed_for_time += 1
-                                elapsed_time = time.time() - start_time
-                                if elapsed_time > 0:
-                                    processing_fps = frames_processed_for_time / elapsed_time
-                                    remaining_frames = frame_count - frame_idx
-                                    eta_seconds = remaining_frames / processing_fps if processing_fps > 0 else 0
-                                    eta_text = f"ETA: {eta_seconds:.0f}s" if eta_seconds < 60 else f"ETA: {eta_seconds/60:.1f}m"
-                                else:
-                                    eta_text = "Calculating ETA..."
-                                
-                                # Update progress
-                                progress = (frame_idx + 1) / frame_count
-                                progress_bar.progress(progress)
-                                status_text.text(f"Đang xử lý: {frame_idx + 1}/{frame_count} frames ({progress*100:.1f}%)")
-                                time_remaining.text(f"{eta_text} — {processing_fps:.1f} FPS")
-                                
-                                # Face detection
-                                faces, aligned_faces = face_detector.detect(frame)
-                                
-                                # Update face tracking
-                                stable_faces = face_tracker.update(faces, frame_idx)
-                                
-                                # Identify stable faces
-                                stable_names = []
-                                stable_scores = []
-                                
-                                # Only process aligned faces if any were detected
-                                if len(faces) > 0:
-                                    total_faces_detected += len(faces)
-                                    
-                                    for face in stable_faces:
-                                        if face['is_stable']:
-                                            # Find corresponding aligned face (optimized matching)
-                                            best_face_img = None
-                                            min_dist = float('inf')
-                                            
-                                            for i, detected_face in enumerate(faces):
-                                                # Simplified distance calculation
-                                                if i < len(aligned_faces):
-                                                    dist = np.sum(np.abs(detected_face[:4] - face['box']))
-                                                    if dist < min_dist:
-                                                        min_dist = dist
-                                                        best_face_img = aligned_faces[i]
-                                            
-                                            # Identify face if found
-                                            if best_face_img is not None:
-                                                name, score = face_recognizer.identify(best_face_img)
-                                                stable_names.append(name)
-                                                stable_scores.append(score)
-                                                
-                                                # Update stats
-                                                if name != "Unknown":
-                                                    identified_faces += 1
-                                                    people_detected.add(name)
-                                                    # Count appearances
-                                                    if name in people_frame_counts:
-                                                        people_frame_counts[name] += 1
-                                                    else:
-                                                        people_frame_counts[name] = 1
-                                                else:
-                                                    unknown_faces += 1
-                                
-                                # Draw results
-                                result_frame = draw_stable_results(frame, stable_faces, stable_names, stable_scores)
-                                
-                                # Add frame number for reference
-                                cv2.putText(
-                                    result_frame, 
-                                    f"Frame: {frame_idx}/{frame_count}", 
-                                    (10, frame_height - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1
-                                )
-                                
-                                # Store results
-                                all_results.append([frame_idx, stable_faces, stable_names, stable_scores, result_frame])
-                                
-                                # Display result if in frame mode
-                                if result_mode == "Từng frame" and processed_frames % 5 == 0:  # Only update display every 5 processed frames
-                                    result_container.image(cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB), use_container_width=True)
-                                    
-                                    # Display face info
-                                    if stable_names:
-                                        info_text = "**Khuôn mặt đã phát hiện:**\n\n"
-                                        for name, score in zip(stable_names, stable_scores):
-                                            status = "✅ Đã nhận dạng" if name != "Unknown" else "❌ Chưa nhận dạng"
-                                            info_text += f"- {name} ({score:.2f}) - {status}\n"
-                                        info_container.markdown(info_text)
-                                
-                                # Save to output video if in video mode
-                                if result_mode == "Video hoàn chỉnh":
-                                    out.write(result_frame)
-                                
-                                processed_frames += 1
-                                
-                            frame_idx += 1
-                    
-                    except Exception as e:
-                        st.error(f"Lỗi khi xử lý video: {str(e)}")
-                    finally:
-                        # Close video capture and writer
-                        cap.release()
-                        if result_mode == "Video hoàn chỉnh":
-                            out.release()
-                        
-                        # Clear progress indicators
-                        progress_container.empty()
-                        
-                        # Calculate processing stats
-                        total_time = time.time() - start_time
-                        processing_fps = processed_frames / total_time if total_time > 0 else 0
-                        
-                        # Display stats
-                        st.success(f"✅ Đã xử lý xong {processed_frames} frames trong {total_time:.1f} giây ({processing_fps:.1f} FPS)")
-                        
-                        stats_col1, stats_col2 = st.columns(2)
-                        with stats_col1:
-                            st.markdown("### Thống kê nhận dạng")
-                            st.markdown(f"- Tổng số khuôn mặt đã phát hiện: **{total_faces_detected}**")
-                            st.markdown(f"- Khuôn mặt đã nhận dạng: **{identified_faces}** ({identified_faces/max(total_faces_detected, 1)*100:.1f}%)")
-                            st.markdown(f"- Khuôn mặt chưa nhận dạng: **{unknown_faces}** ({unknown_faces/max(total_faces_detected, 1)*100:.1f}%)")
-                            
-                        with stats_col2:
-                            st.markdown("### Người xuất hiện trong video")
-                            if people_detected:
-                                # Sắp xếp theo số lần xuất hiện nhiều nhất
-                                sorted_people = sorted(people_frame_counts.items(), key=lambda x: x[1], reverse=True)
-                                for person, count in sorted_people:
-                                    frames_percentage = count / processed_frames * 100
-                                    st.markdown(f"- **{person}**: {count} frames ({frames_percentage:.1f}%)")
-                            else:
-                                st.markdown("Không có người nào được nhận dạng")
-                        
-                        # Show final result
-                        if result_mode == "Video hoàn chỉnh":
-                            # Display processed video
-                            st.markdown("### Video kết quả")
-                            
-                            try:
-                                # Đảm bảo video được đóng trước khi đọc lại
-                                if 'out' in locals():
-                                    out.release()
-                                    
-                                # Kiểm tra xem file có tồn tại và có kích thước không
-                                if os.path.exists(output_video_path) and os.path.getsize(output_video_path) > 0:
-                                    # Thêm codec cho đúng định dạng web
-                                    temp_web_path = f"temp_web_{int(time.time())}.mp4"
-                                    os.system(f"ffmpeg -y -i {output_video_path} -vcodec libx264 -pix_fmt yuv420p {temp_web_path}")
-                                    
-                                    if os.path.exists(temp_web_path) and os.path.getsize(temp_web_path) > 0:
-                                        # Đọc video đã xử lý với đúng định dạng cho web
-                                        video_bytes = open(temp_web_path, 'rb').read()
-                                        
-                                        # Hiển thị video sử dụng component có sẵn của Streamlit
-                                        st.video(video_bytes)
-                                        
-                                        # Thêm nút tải về với style rõ ràng
-                                        st.download_button(
-                                            label="📥 Tải video kết quả",
-                                            data=video_bytes,
-                                            file_name=f"face_recognition_{int(time.time())}.mp4",
-                                            mime="video/mp4",
-                                            use_container_width=True
-                                        )
-                                        
-                                        # Xóa file tạm
-                                        try:
-                                            os.remove(temp_web_path)
-                                        except:
-                                            pass
-                                    else:
-                                        st.error("Không thể chuyển đổi video sang định dạng web. Hãy thử lại.")
-                                        st.info("Bạn có thể cần cài đặt ffmpeg: `pip install ffmpeg-python`")
-                                else:
-                                    st.error("Video kết quả không tồn tại hoặc rỗng. Vui lòng thử lại quá trình xử lý.")
-                            except Exception as e:
-                                st.error(f"Lỗi khi hiển thị video: {str(e)}")
-                                st.info("Vui lòng thử lại với video khác hoặc chọn chế độ hiển thị từng frame.")
-                                
-                            # Clean up temporary files
-                            try:
-                                os.remove(output_video_path)
-                            except:
-                                pass
-                        else:
-                            # Display the highlights
-                            st.markdown("### Các frame đáng chú ý")
-                            
-                            # Find frames with the most recognized faces
-                            highlight_frames = []
-                            for result in all_results:
-                                frame_idx, faces, names, scores, frame = result
-                                recognized_count = sum(1 for name in names if name != "Unknown")
-                                if recognized_count > 0:
-                                    highlight_frames.append((recognized_count, frame_idx, frame))
-                            
-                            # Sort by recognition count (most first)
-                            highlight_frames.sort(reverse=True)
-                            
-                            # Display top highlights (max 5)
-                            max_highlights = min(5, len(highlight_frames))
-                            if max_highlights > 0:
-                                highlight_cols = st.columns(max_highlights)
-                                for i in range(max_highlights):
-                                    if i < len(highlight_frames):
-                                        count, frame_idx, frame = highlight_frames[i]
-                                        with highlight_cols[i]:
-                                            st.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_container_width=True)
-                                            st.caption(f"Frame {frame_idx} - {count} người")
-                            else:
-                                st.warning("Không tìm thấy frame nào với khuôn mặt được nhận dạng")
-                            
-                    # Clean up temporary file
-                    try:
-                        os.remove(temp_video_path)
-                    except:
-                        pass
+            # Process video in realtime mode
+            process_video_realtime(video_file, face_detector, face_recognizer)
+            
     elif mode == "🎥 Video trực tiếp":
         st.markdown("### 🎥 Video trực tiếp từ camera")
         
@@ -858,3 +560,341 @@ def show():
             
             Nhấn **Bắt đầu** để mở camera.
             """)
+            
+def process_video_realtime(video_file, face_detector, face_recognizer):
+    """
+    Xử lý video theo thời gian thực - không cần đợi xử lý tất cả các frame
+    """
+    import tempfile
+    import os
+    import threading
+    import queue
+    import time
+    from datetime import timedelta
+    
+    # Tạo file tạm
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmpfile:
+        temp_video_path = tmpfile.name
+        # Lưu video vào file tạm
+        tmpfile.write(video_file.getbuffer())
+    
+    # Mở video
+    cap = cv2.VideoCapture(temp_video_path)
+    if not cap.isOpened():
+        st.error("Không thể đọc video. Vui lòng thử với định dạng khác.")
+        try:
+            os.remove(temp_video_path)
+        except:
+            pass
+        return
+    
+    # Lấy thông tin video
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    duration = frame_count / fps if fps > 0 else 0
+    
+    # Hiển thị thông tin video
+    st.info(f"Thông tin video: {frame_width}x{frame_height}, {fps:.1f} FPS, {frame_count} frames, thời lượng: {timedelta(seconds=duration)}")
+    
+    # Điều chỉnh độ nhạy và tốc độ xử lý
+    col1, col2 = st.columns(2)
+    with col1:
+        confidence_threshold = st.slider(
+            "Ngưỡng nhận diện:", 
+            min_value=0.5, 
+            max_value=0.95, 
+            value=0.7, 
+            step=0.05,
+            help="Điều chỉnh độ nhạy khi nhận diện (cao hơn = ít nhận diện sai hơn)"
+        )
+    with col2:
+        skip_frames = st.slider(
+            "Tốc độ xử lý:", 
+            min_value=1, 
+            max_value=10, 
+            value=2, 
+            step=1,
+            help="Số frame bỏ qua khi xử lý (cao hơn = nhanh hơn nhưng mất một số chi tiết)"
+        )
+    
+    # Khởi tạo face tracker
+    face_tracker = StableFaceTracker(
+        max_distance=40.0,
+        min_frames=2,
+        max_missing_frames=10
+    )
+    
+    # Thông tin theo dõi
+    stats = {
+        'total_faces': 0,
+        'identified_faces': 0,
+        'unknown_faces': 0,
+        'people_detected': set(),
+        'people_frames': {}
+    }
+    
+    # Queue để trao đổi dữ liệu giữa các luồng
+    frame_queue = queue.Queue(maxsize=30)  # Buffer 30 frames
+    result_queue = queue.Queue(maxsize=30)
+    stop_event = threading.Event()
+    
+    # Placeholder hiển thị
+    video_placeholder = st.empty()
+    progress_bar = st.progress(0.0)
+    info_placeholder = st.empty()
+    stats_placeholder = st.empty()
+    
+    # Thread xử lý frame
+    def process_frames():
+        frame_idx = 0
+        processed_idx = 0
+        
+        while not stop_event.is_set():
+            try:
+                if frame_queue.empty():
+                    time.sleep(0.01)
+                    continue
+                
+                frame, current_pos = frame_queue.get()
+                frame_idx += 1
+                
+                # Chỉ xử lý mỗi N frame theo skip_frames
+                if frame_idx % skip_frames == 0:
+                    # Face detection
+                    start_time = time.time()
+                    faces, aligned_faces = face_detector.detect(frame)
+                    
+                    # Update face tracking
+                    stable_faces = face_tracker.update(faces, frame_idx)
+                    
+                    # Nhận diện các khuôn mặt ổn định
+                    stable_names = []
+                    stable_scores = []
+                    
+                    if len(faces) > 0:
+                        stats['total_faces'] += len(faces)
+                        
+                        for face in stable_faces:
+                            if face['is_stable']:
+                                # Tìm aligned face tương ứng
+                                best_face_img = None
+                                min_dist = float('inf')
+                                
+                                for i, detected_face in enumerate(faces):
+                                    if i < len(aligned_faces):
+                                        dist = np.sum(np.abs(detected_face[:4] - face['box']))
+                                        if dist < min_dist:
+                                            min_dist = dist
+                                            best_face_img = aligned_faces[i]
+                                
+                                if best_face_img is not None:
+                                    name, score = face_recognizer.identify(best_face_img)
+                                    
+                                    # Áp dụng ngưỡng tin cậy
+                                    if score < confidence_threshold:
+                                        name = "Unknown"
+                                        stats['unknown_faces'] += 1
+                                    else:
+                                        stats['identified_faces'] += 1
+                                        stats['people_detected'].add(name)
+                                        # Đếm số frame mỗi người xuất hiện
+                                        stats['people_frames'][name] = stats['people_frames'].get(name, 0) + 1
+                                    
+                                    stable_names.append(name)
+                                    stable_scores.append(score)
+                    
+                    # Vẽ kết quả
+                    result_frame = draw_stable_results(frame, stable_faces, stable_names, stable_scores)
+                    
+                    # Tính thời gian xử lý
+                    process_time = time.time() - start_time
+                    fps_text = f"Processing: {1/process_time:.1f} FPS"
+                    
+                    # Thêm thông tin vào frame
+                    cv2.putText(
+                        result_frame, 
+                        fps_text, 
+                        (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
+                    )
+                    
+                    # Thêm vị trí frame
+                    position_text = f"Frame: {frame_idx}/{frame_count} ({current_pos*100:.0f}%)"
+                    cv2.putText(
+                        result_frame, 
+                        position_text, 
+                        (10, frame_height - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
+                    )
+                    
+                    # Gửi kết quả vào queue
+                    result_queue.put((result_frame, stable_names, stable_scores, current_pos))
+                    processed_idx += 1
+                
+                frame_queue.task_done()
+                
+            except Exception as e:
+                print(f"Lỗi xử lý frame: {e}")
+                if frame_queue.qsize() > 0:
+                    frame_queue.task_done()
+                time.sleep(0.1)
+    
+    # Thread đọc frame
+    def read_frames():
+        frame_idx = 0
+        try:
+            while cap.isOpened() and not stop_event.is_set():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                
+                # Tính vị trí tương đối
+                current_pos = cap.get(cv2.CAP_PROP_POS_FRAMES) / frame_count
+                
+                # Đưa frame vào queue để xử lý, với kiểm tra để tránh tắc nghẽn
+                if not frame_queue.full():
+                    frame_queue.put((frame, current_pos))
+                else:
+                    # Nếu queue đầy, đợi một chút
+                    time.sleep(0.01)
+                
+                frame_idx += 1
+                
+        except Exception as e:
+            print(f"Lỗi đọc frame: {e}")
+        finally:
+            # Đánh dấu đã đọc xong
+            stop_event.set()
+            cap.release()
+    
+    # Nút điều khiển
+    st.markdown("### Điều khiển xử lý video")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        start_button = st.button("▶️ Bắt đầu xử lý", type="primary", use_container_width=True)
+    with col2:
+        stop_button = st.button("⏹️ Dừng xử lý", use_container_width=True)
+    
+    if start_button:
+        # Khởi động các thread
+        process_thread = threading.Thread(target=process_frames)
+        read_thread = threading.Thread(target=read_frames)
+        
+        process_thread.daemon = True
+        read_thread.daemon = True
+        
+        # Bắt đầu xử lý
+        process_thread.start()
+        read_thread.start()
+        
+        start_time = time.time()
+        frame_count_displayed = 0
+        
+        # Hiển thị kết quả theo thời gian thực
+        st.markdown("### Video đang xử lý")
+        
+        # Vòng lặp hiển thị kết quả
+        try:
+            while not stop_event.is_set() or not result_queue.empty():
+                if stop_button:
+                    stop_event.set()
+                    st.warning("Đang dừng xử lý...")
+                    break
+                
+                if not result_queue.empty():
+                    result_frame, names, scores, pos = result_queue.get()
+                    frame_count_displayed += 1
+                    
+                    # Cập nhật video và thanh tiến trình
+                    progress_bar.progress(pos)
+                    video_placeholder.image(
+                        cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB),
+                        use_container_width=True
+                    )
+                    
+                    # Tính FPS hiển thị
+                    elapsed = time.time() - start_time
+                    display_fps = frame_count_displayed / elapsed if elapsed > 0 else 0
+                    
+                    # Hiển thị thông tin nhận diện hiện tại
+                    if names:
+                        info_text = f"**Tốc độ hiển thị: {display_fps:.1f} FPS | Khuôn mặt nhận diện được:**\n\n"
+                        for name, score in zip(names, scores):
+                            status = "✅" if name != "Unknown" else "❌"
+                            info_text += f"{status} {name} ({score:.2f}) "
+                        info_placeholder.markdown(info_text)
+                    
+                    # Hiển thị thống kê tổng hợp
+                    if frame_count_displayed % 10 == 0:  # Cập nhật mỗi 10 frame
+                        stats_text = f"""
+                        ### Thống kê xử lý:
+                        - Đã xử lý: {frame_count_displayed} frames ({display_fps:.1f} FPS)
+                        - Khuôn mặt phát hiện: {stats['total_faces']}
+                        - Khuôn mặt nhận diện: {stats['identified_faces']}
+                        - Không nhận diện được: {stats['unknown_faces']}
+                        - Số người nhận diện được: {len(stats['people_detected'])}
+                        """
+                        
+                        # Hiển thị top 3 người xuất hiện nhiều nhất
+                        if stats['people_frames']:
+                            stats_text += "\n\n**Top người xuất hiện nhiều nhất:**\n"
+                            sorted_people = sorted(stats['people_frames'].items(), key=lambda x: x[1], reverse=True)
+                            for person, count in sorted_people[:3]:
+                                stats_text += f"- {person}: {count} frames\n"
+                                
+                        stats_placeholder.markdown(stats_text)
+                    
+                    result_queue.task_done()
+                else:
+                    # Nếu không có kết quả mới, đợi một chút
+                    time.sleep(0.01)
+        
+        except Exception as e:
+            st.error(f"Lỗi hiển thị kết quả: {e}")
+        finally:
+            # Đảm bảo dừng tất cả luồng
+            stop_event.set()
+            
+            # Đợi các thread kết thúc
+            if 'process_thread' in locals() and process_thread.is_alive():
+                process_thread.join(timeout=1.0)
+            if 'read_thread' in locals() and read_thread.is_alive():
+                read_thread.join(timeout=1.0)
+            
+            # Tính thời gian chạy
+            run_time = time.time() - start_time
+            
+            # Thông báo kết thúc
+            st.success(f"Đã hoàn thành xử lý {frame_count_displayed} frames trong {run_time:.1f} giây!")
+            
+            # Hiển thị thống kê cuối cùng
+            st.subheader("Kết quả nhận diện")
+            
+            # Hiển thị các người được nhận diện 
+            if stats['people_detected']:
+                st.markdown("### Người xuất hiện trong video:")
+                
+                # Sắp xếp theo số lần xuất hiện
+                if stats['people_frames']:
+                    people_cols = st.columns(min(3, len(stats['people_frames'])))
+                    sorted_people = sorted(stats['people_frames'].items(), key=lambda x: x[1], reverse=True)
+                    
+                    for i, (person, frames) in enumerate(sorted_people):
+                        with people_cols[i % 3]:
+                            frame_percent = frames / frame_count_displayed * 100
+                            st.metric(
+                                label=person,
+                                value=f"{frames} frames",
+                                delta=f"{frame_percent:.1f}%"
+                            )
+            else:
+                st.warning("Không nhận diện được người nào trong video.")
+    
+    # Dọn dẹp
+    try:
+        os.remove(temp_video_path)
+    except:
+        pass
