@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 
 class FaceDetector:
-    def __init__(self, model_path: str, score_threshold: float = 0.9, nms_threshold: float = 0.3):
+    def __init__(self, model_path: str, score_threshold: float = 0.9, nms_threshold: float = 0.6):
         """
         Initialize YuNet face detector
         Args:
@@ -151,7 +151,7 @@ class FaceRecognizer:
             print(f"Error adding face: {e}")
             return False
     
-    def identify(self, face_img: np.ndarray, threshold: float = 0.4) -> Tuple[str, float]:
+    def identify(self, face_img: np.ndarray, threshold: float = 0.6) -> Tuple[str, float]:
         """
         Identify person from face image
         Args:
@@ -186,7 +186,7 @@ class FaceRecognizer:
             print(f"Error in face identification: {e}")
             return "Error", 0.0
         
-    def identify_with_flip(self, face_img: np.ndarray, threshold: float = 0.3) -> Tuple[str, float, bool]:
+    def identify_with_flip(self, face_img: np.ndarray, threshold: float = 0.6) -> Tuple[str, float, bool]:
         """
         Identify person from face image, trying both original and flipped versions
         Args:
@@ -555,7 +555,7 @@ def build_face_database(detector: FaceDetector, recognizer: FaceRecognizer,
             img_path = os.path.join(person_dir, img_file)
             
             # Skip non-image files
-            if not img_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+            if not img_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
                 continue
             
             # Read image
