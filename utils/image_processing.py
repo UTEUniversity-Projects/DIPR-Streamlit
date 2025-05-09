@@ -16,11 +16,11 @@ class ImageProcessor:
         """
         Process image using selected function from specific chapter
         Args:
-            img: Input image
+            img: Input image (expected in BGR format for color images)
             chapter: Chapter number (3, 4, or 9)
             func_name: Function name
         Returns:
-            Processed image
+            Processed image (in BGR format for color images)
         """
         # Map chapter format to dictionary keys
         chapter_map = {
@@ -36,9 +36,24 @@ class ImageProcessor:
         if func_name not in self.functions[chapter_key]:
             raise ValueError(f"Function {func_name} not found in chapter {chapter}")
         
-        # Prepare image for processing
+        # Prepare image for processing - ensure the image is in the correct color format
         img_prepared = chapter_utils.prepare_image_for_processing(img, func_name)
         
         # Process image
-        return chapter_utils.process_image(img_prepared, func_name)
-    
+        result = chapter_utils.process_image(img_prepared, func_name)
+        
+        # Ensure consistent color format in output
+        # Note: Most functions should preserve the input format,
+        # but we'll make sure any potential conversions are handled
+        if func_name in ["NegativeColor", "HistEqualColor"]:
+            # These functions should return color images (BGR)
+            if len(result.shape) == 2:
+                # If result is somehow grayscale, convert to BGR
+                result = cv2.cvtColor(result, cv2.COLOR_GRAY2BGR)
+        else:
+            # For grayscale functions, ensure we return grayscale
+            if len(img_prepared.shape) == 2 and len(result.shape) == 3:
+                # If input was grayscale but output is color, convert back to grayscale
+                result = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+        
+        return result

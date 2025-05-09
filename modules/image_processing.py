@@ -10,7 +10,7 @@ def load_image_processor():
     return ImageProcessor()
 
 def show():
-    # Sección de introducción
+    # Section de introducción
     with st.expander("🔍 Giới thiệu về xử lý ảnh số", expanded=False):
         st.markdown("""
         ### Giới thiệu về xử lý ảnh số
@@ -43,7 +43,7 @@ def show():
         - Xử lý tiền ảnh cho các thuật toán AI
         """)
             
-    # Sección de instrucciones
+    # Section de instrucciones
     with st.expander("📋 Hướng dẫn sử dụng", expanded=False):
         st.markdown("""
         ### Hướng dẫn sử dụng
@@ -68,26 +68,6 @@ def show():
            - Kết quả xử lý sẽ hiển thị bên phải
            - Nhấn "Tải xuống kết quả" để lưu ảnh đã xử lý
            - Chọn định dạng tải xuống: JPG, PNG hoặc TIFF
-        
-        #### Gợi ý cho từng loại xử lý:
-        
-        **Xử lý điểm ảnh (Chương 3):**
-        - **Negative**: Tạo hiệu ứng âm bản
-        - **Logarit/Gamma**: Điều chỉnh độ sáng và tăng cường chi tiết vùng tối
-        - **HistEqual**: Cải thiện độ tương phản
-        - **Sharpening**: Làm sắc nét ảnh mờ
-        
-        **Xử lý tần số (Chương 4):**
-        - **Spectrum**: Phân tích phổ tần số của ảnh
-        - **RemoveMoire**: Loại bỏ hiệu ứng Moire trong ảnh scan
-        - **RemoveInterference**: Loại bỏ nhiễu giao thoa
-        - **DeMotion**: Khử mờ chuyển động
-        
-        **Xử lý hình thái (Chương 9):**
-        - **Erosion**: Loại bỏ chi tiết nhỏ, làm mỏng đối tượng
-        - **Dilation**: Làm dày đối tượng, lấp đầy lỗ hổng nhỏ
-        - **Boundary**: Phát hiện biên của đối tượng
-        - **Contour**: Tạo đường viền cho các đối tượng trong ảnh
         """)
             
     image_processor = load_image_processor()
@@ -121,12 +101,19 @@ def show():
         if file_extension in ['tif', 'tiff']:
             # Đọc file TIFF bằng PIL và chuyển sang OpenCV
             img = Image.open(uploaded_file)
-            # Chuyển đổi PIL image sang OpenCV format
-            if img.mode == 'RGB':
-                img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+            # Chuyển đổi PIL image sang OpenCV format (PIL là RGB, OpenCV là BGR)
+            img_np = np.array(img)
+            
+            # Kiểm tra số kênh màu
+            if len(img_np.shape) == 3 and img_np.shape[2] == 3:
+                # Ảnh RGB, chuyển sang BGR cho OpenCV
+                img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+            elif len(img_np.shape) == 3 and img_np.shape[2] == 4:
+                # Ảnh RGBA, chuyển sang BGR cho OpenCV
+                img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGBA2BGR)
             else:
-                # Nếu là grayscale hoặc CMYK, chuyển sang RGB trước
-                img_cv = cv2.cvtColor(np.array(img.convert('RGB')), cv2.COLOR_RGB2BGR)
+                # Ảnh grayscale, giữ nguyên
+                img_cv = img_np
         else:
             # Đọc file không phải TIFF bằng OpenCV
             file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
@@ -136,25 +123,34 @@ def show():
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("Ảnh gốc")
-            st.image(img_cv, channels="BGR", use_container_width=True)
+            # Chuyển đổi từ BGR sang RGB trước khi hiển thị với Streamlit
+            if len(img_cv.shape) == 3 and img_cv.shape[2] == 3:
+                display_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+                st.image(display_img, use_container_width=True)
+            else:
+                # Ảnh grayscale, không cần chuyển đổi
+                st.image(img_cv, use_container_width=True)
         
         with st.spinner(f"Đang áp dụng {selected_func}..."):
             try:
                 if selected_func in ["NegativeColor", "HistEqualColor"]:
                     processed_img = image_processor.process(img_cv, chapter, selected_func)
                 else:
-                    gray_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+                    if len(img_cv.shape) == 3:
+                        gray_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+                    else:
+                        gray_img = img_cv
                     processed_img = image_processor.process(gray_img, chapter, selected_func)
                 
                 with col2:
                     st.subheader("Kết quả")
-                    # Sửa lại: không dùng 'cmap' cho ảnh grayscale
+                    # Hiển thị ảnh kết quả tùy thuộc vào loại ảnh
                     if len(processed_img.shape) == 2:  # Ảnh xám
-                        # Chuyển ảnh grayscale về RGB để hiển thị
-                        processed_img_rgb = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2RGB)
-                        st.image(processed_img_rgb, use_container_width=True)
-                    else:  # Ảnh màu
-                        st.image(processed_img, channels="BGR", use_container_width=True)
+                        st.image(processed_img, use_container_width=True)
+                    else:  # Ảnh màu (BGR)
+                        # Chuyển đổi từ BGR sang RGB để hiển thị với Streamlit
+                        display_processed = cv2.cvtColor(processed_img, cv2.COLOR_BGR2RGB)
+                        st.image(display_processed, use_container_width=True)
                 
                 if st.button("Tải xuống kết quả"):
                     # Tùy chọn định dạng khi tải xuống
@@ -168,8 +164,10 @@ def show():
                     if download_format == 'TIFF':
                         # Chuyển đổi và lưu là TIFF
                         if len(processed_img.shape) == 2:
+                            # Ảnh grayscale
                             pil_img = Image.fromarray(processed_img)
                         else:
+                            # Ảnh BGR, chuyển sang RGB cho PIL
                             pil_img = Image.fromarray(cv2.cvtColor(processed_img, cv2.COLOR_BGR2RGB))
                         
                         buf = io.BytesIO()
@@ -185,7 +183,10 @@ def show():
                     else:
                         # Lưu JPG hoặc PNG
                         ext = '.jpg' if download_format == 'JPG' else '.png'
+                        
+                        # OpenCV lưu file trực tiếp ở định dạng BGR
                         _, buffer = cv2.imencode(ext, processed_img)
+                        
                         st.download_button(
                             label=f"Download {download_format}",
                             data=buffer.tobytes(),

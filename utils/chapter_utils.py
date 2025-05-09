@@ -66,7 +66,7 @@ def process_image(img: np.ndarray, func_name: str, params: Dict[str, Any] = None
     """
     Process image using the specified function
     Args:
-        img: Input image
+        img: Input image (grayscale or BGR)
         func_name: Function name
         params: Additional parameters for the function
     Returns:
@@ -107,24 +107,41 @@ def prepare_image_for_processing(img: np.ndarray, func_name: str) -> np.ndarray:
     """
     Prepare image for processing with specific function
     Args:
-        img: Input image
+        img: Input image (expected in BGR for color images)
         func_name: Function name
     Returns:
-        prepared_img: Prepared image
+        prepared_img: Prepared image for processing (guaranteed to be in correct format)
     """
-    # Determine if function requires grayscale input
+    # Verify input image is valid
+    if img is None or img.size == 0:
+        raise ValueError("Invalid input image (None or empty)")
+        
+    # Determine if function requires color or grayscale input
     color_functions = ["NegativeColor", "HistEqualColor"]
     
     if func_name in color_functions:
-        # Ensure image is in color
+        # These functions expect color images (BGR)
         if len(img.shape) == 2:
-            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            # Convert grayscale to BGR
+            return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        elif len(img.shape) == 3 and img.shape[2] == 3:
+            # Already a BGR image, return as is
+            return img
+        elif len(img.shape) == 3 and img.shape[2] == 4:
+            # RGBA image, convert to BGR
+            return cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
+        else:
+            raise ValueError(f"Unsupported image format: shape {img.shape}")
     else:
-        # Ensure image is grayscale
-        if len(img.shape) == 3:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    return img
+        # These functions expect grayscale images
+        if len(img.shape) == 2:
+            # Already grayscale, return as is
+            return img
+        elif len(img.shape) == 3 and img.shape[2] >= 3:
+            # Color image, convert to grayscale
+            return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        else:
+            raise ValueError(f"Unsupported image format: shape {img.shape}")
 
 def get_function_info() -> Dict[str, List[Dict[str, str]]]:
     """
