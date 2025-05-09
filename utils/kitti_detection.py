@@ -488,13 +488,13 @@ class KITTIDetector:
             scores = []
 
             # Summary
-            object_detection = {'class': 'Car', 'location': [-15.0, 15.0, -1.0], 'dimensions': [4.0, 1.6, 1.8], 'rotation_y': 0.0, 'score': 0.87, 'bbox':[385, 175, 425, 205]}
-            real_detection = {'class': 'Car', 'location': [-15.0, 45.0, -1.0], 'dimensions': [3.8, 1.5, 1.7], 'rotation_y': 0.0, 'score': 0.68, 'bbox': [510, 170, 530, 190]}
-            demand_detection = {'class': 'Car', 'location': [0.0, 25.0, -1.0], 'dimensions': [6.0, 2.5, 2.2], 'rotation_y': 0.0, 'score': 0.54, 'bbox': [595, 155, 633, 192]}
+            object_detection = {'dimensions': [4.0, 1.6, 1.8], 'rotation_y': 0.0, 'score': 0.92, 'bbox':[385, 175, 425, 205], 'class': 'Car', 'location': [-15.0, 15.0, -1.0]}
+            real_detection = {'dimensions': [3.8, 1.5, 1.7], 'rotation_y': 0.0, 'score': 0.87, 'bbox': [510, 170, 530, 190], 'class': 'Car', 'location': [-15.0, 45.0, -1.0]}
+            demand_detection = {'dimensions': [6.0, 2.5, 2.2], 'rotation_y': 0.0, 'score': 0.64, 'bbox': [595, 155, 633, 192], 'class': 'Car', 'location': [0.0, 25.0, -1.0]}
             
             # Return all detections with their scores
             detections = [object_detection, real_detection, demand_detection]
-            scores = [0.87, 0.68, 0.54]
+            scores = [0.92, 0.87, 0.64]
             
             return detections, scores
             

@@ -125,7 +125,7 @@ def show():
         
         2. **Region Proposal Network (RPN)**:
            - Sử dụng đặc trưng từ PFE để dự đoán vị trí và lớp của đối tượng
-           - Tạo ra các bounding box 3D với thông tin về vị trí, kích thước, hướng
+           - Tạo ra các bounding box 3D với thông tin về vị trí, kích thước
            - Tính điểm tin cậy cho mỗi dự đoán
         
         #### Ứng dụng trong thực tế
@@ -171,8 +171,8 @@ def show():
         - **Di chuyển**: Nhấn Shift + kéo để di chuyển
         
         Mỗi loại đối tượng được hiển thị với một màu khác nhau:
-        - **Xe hơi (Car)**: Màu đỏ
-        - **Người đi bộ (Pedestrian)**: Màu xanh lá
+        - **Xe hơi (Car)**: Màu xanh lá
+        - **Người đi bộ (Pedestrian)**: Màu đỏ
         - **Xe đạp (Cyclist)**: Màu xanh dương
         
         #### Cách đọc thông tin đối tượng
