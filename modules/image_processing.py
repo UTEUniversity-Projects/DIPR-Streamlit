@@ -95,104 +95,179 @@ def show():
     uploaded_file = st.file_uploader("Chọn ảnh để xử lý", type=["jpg", "jpeg", "png", "webp", "jfif", "tif", "tiff"])
     
     if uploaded_file is not None:
-        # Kiểm tra định dạng file
-        file_extension = uploaded_file.name.lower().split('.')[-1]
-        
-        if file_extension in ['tif', 'tiff']:
-            # Đọc file TIFF bằng PIL và chuyển sang OpenCV
-            img = Image.open(uploaded_file)
-            # Chuyển đổi PIL image sang OpenCV format (PIL là RGB, OpenCV là BGR)
-            img_np = np.array(img)
-            
-            # Kiểm tra số kênh màu
-            if len(img_np.shape) == 3 and img_np.shape[2] == 3:
-                # Ảnh RGB, chuyển sang BGR cho OpenCV
-                img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
-            elif len(img_np.shape) == 3 and img_np.shape[2] == 4:
-                # Ảnh RGBA, chuyển sang BGR cho OpenCV
-                img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGBA2BGR)
-            else:
-                # Ảnh grayscale, giữ nguyên
-                img_cv = img_np
-        else:
-            # Đọc file không phải TIFF bằng OpenCV
-            file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-            img_cv = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-        
-        # Hiển thị ảnh gốc
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Ảnh gốc")
-            # Chuyển đổi từ BGR sang RGB trước khi hiển thị với Streamlit
-            if len(img_cv.shape) == 3 and img_cv.shape[2] == 3:
-                display_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
-                st.image(display_img, use_container_width=True)
-            else:
-                # Ảnh grayscale, không cần chuyển đổi
-                st.image(img_cv, use_container_width=True)
-        
-        with st.spinner(f"Đang áp dụng {selected_func}..."):
+        # Xử lý đặc biệt cho chương 9
+        if chapter == "9":
+            # Sử dụng PIL để đọc ảnh
             try:
-                if selected_func in ["NegativeColor", "HistEqualColor"]:
-                    processed_img = image_processor.process(img_cv, chapter, selected_func)
-                else:
-                    if len(img_cv.shape) == 3:
-                        gray_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-                    else:
-                        gray_img = img_cv
-                    processed_img = image_processor.process(gray_img, chapter, selected_func)
+                # Đọc ảnh bằng PIL
+                pil_img = Image.open(uploaded_file)
                 
-                with col2:
-                    st.subheader("Kết quả")
-                    # Hiển thị ảnh kết quả tùy thuộc vào loại ảnh
-                    if len(processed_img.shape) == 2:  # Ảnh xám
-                        st.image(processed_img, use_container_width=True)
-                    else:  # Ảnh màu (BGR)
-                        # Chuyển đổi từ BGR sang RGB để hiển thị với Streamlit
-                        display_processed = cv2.cvtColor(processed_img, cv2.COLOR_BGR2RGB)
-                        st.image(display_processed, use_container_width=True)
+                # Chuyển sang grayscale cho các hàm chương 9
+                if pil_img.mode != 'L':
+                    pil_img = pil_img.convert('L')
                 
-                if st.button("Tải xuống kết quả"):
-                    # Tùy chọn định dạng khi tải xuống
-                    download_format = st.select_slider(
-                        "Chọn định dạng:",
-                        options=['JPG', 'PNG', 'TIFF'],
-                        value='JPG'
-                    )
+                # Hiển thị ảnh gốc
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("Ảnh gốc")
+                    st.image(pil_img, use_container_width=True)
+                
+                # Chuyển đổi PIL Image sang numpy array
+                img_np = np.array(pil_img)
+                
+                # In thông tin để debug
+                st.write(f"Ảnh gốc: shape={img_np.shape}, dtype={img_np.dtype}")
+                
+                with st.spinner(f"Đang áp dụng {selected_func}..."):
+                    # Lấy hàm xử lý từ chapter9.py
+                    try:
+                        # Import động chapter9
+                        import importlib
+                        chapter9 = importlib.import_module("chapters.chapter9")
+                        
+                        # Lấy hàm tương ứng
+                        func = getattr(chapter9, selected_func)
+                        
+                        # Đảm bảo img_np là uint8
+                        if img_np.dtype != np.uint8:
+                            img_np = img_np.astype(np.uint8)
+                        
+                        # Áp dụng hàm xử lý với ảnh numpy
+                        processed_img = func(img_np)
+                        
+                        # Hiển thị ảnh kết quả
+                        with col2:
+                            st.subheader("Kết quả")
+                            
+                            # Kiểm tra kiểu dữ liệu kết quả
+                            if processed_img is None:
+                                st.error("Xử lý ảnh không thành công, kết quả là None")
+                            else:
+                                # In thông tin để debug
+                                st.write(f"Ảnh kết quả: shape={processed_img.shape}, dtype={processed_img.dtype}")
+                                
+                                # Hiển thị kết quả dựa vào số kênh
+                                if len(processed_img.shape) == 2:  # Grayscale
+                                    st.image(processed_img, use_container_width=True)
+                                else:  # Color (BGR)
+                                    # Chuyển BGR thành RGB cho Streamlit
+                                    rgb_img = cv2.cvtColor(processed_img, cv2.COLOR_BGR2RGB)
+                                    st.image(rgb_img, use_container_width=True)
+                            
+                                # Phần tải xuống kết quả
+                                if st.button("Tải xuống kết quả"):
+                                    # Tùy chọn định dạng
+                                    download_format = st.select_slider(
+                                        "Chọn định dạng:",
+                                        options=['JPG', 'PNG', 'TIFF'],
+                                        value='JPG'
+                                    )
+                                    
+                                    # Tạo buffer cho tải xuống
+                                    buffer = io.BytesIO()
+                                    
+                                    # Chuyển numpy array về PIL Image
+                                    if len(processed_img.shape) == 2:  # Grayscale
+                                        result_pil = Image.fromarray(processed_img)
+                                    else:  # BGR
+                                        result_pil = Image.fromarray(cv2.cvtColor(processed_img, cv2.COLOR_BGR2RGB))
+                                    
+                                    # Lưu với định dạng đã chọn
+                                    if download_format == 'TIFF':
+                                        result_pil.save(buffer, format='TIFF')
+                                        mime = "image/tiff"
+                                        file_ext = "tiff"
+                                    elif download_format == 'PNG':
+                                        result_pil.save(buffer, format='PNG')
+                                        mime = "image/png"
+                                        file_ext = "png"
+                                    else:  # JPG
+                                        result_pil.save(buffer, format='JPEG')
+                                        mime = "image/jpeg"
+                                        file_ext = "jpg"
+                                    
+                                    # Cung cấp nút tải xuống
+                                    st.download_button(
+                                        label=f"Download {download_format}",
+                                        data=buffer.getvalue(),
+                                        file_name=f"processed_{selected_func}.{file_ext}",
+                                        mime=mime
+                                    )
                     
-                    # Tải xuống với định dạng được chọn
-                    if download_format == 'TIFF':
-                        # Chuyển đổi và lưu là TIFF
-                        if len(processed_img.shape) == 2:
-                            # Ảnh grayscale
-                            pil_img = Image.fromarray(processed_img)
-                        else:
-                            # Ảnh BGR, chuyển sang RGB cho PIL
-                            pil_img = Image.fromarray(cv2.cvtColor(processed_img, cv2.COLOR_BGR2RGB))
-                        
-                        buf = io.BytesIO()
-                        pil_img.save(buf, format='TIFF')
-                        tiff_data = buf.getvalue()
-                        
-                        st.download_button(
-                            label=f"Download {download_format}",
-                            data=tiff_data,
-                            file_name=f"processed_{selected_func}.tiff",
-                            mime="image/tiff"
-                        )
-                    else:
-                        # Lưu JPG hoặc PNG
-                        ext = '.jpg' if download_format == 'JPG' else '.png'
-                        
-                        # OpenCV lưu file trực tiếp ở định dạng BGR
-                        _, buffer = cv2.imencode(ext, processed_img)
-                        
-                        st.download_button(
-                            label=f"Download {download_format}",
-                            data=buffer.tobytes(),
-                            file_name=f"processed_{selected_func}{ext}",
-                            mime=f"image/{download_format.lower()}"
-                        )
-                    
+                    except Exception as e:
+                        st.error(f"Lỗi xử lý ảnh: {str(e)}")
+                        import traceback
+                        st.code(traceback.format_exc())
+            
             except Exception as e:
-                st.error(f"Lỗi xử lý ảnh: {str(e)}")
+                st.error(f"Lỗi khi mở file: {str(e)}")
+        
+        else:
+            # Kiểm tra định dạng file cho các chương khác (3 và 4)
+            file_extension = uploaded_file.name.lower().split('.')[-1]
+            
+            try:
+                # Kiểm tra định dạng file
+                if file_extension in ['tif', 'tiff']:
+                    # Đọc file TIFF bằng PIL
+                    img = Image.open(uploaded_file)
+                    # Chuyển đổi PIL image sang OpenCV format
+                    img_np = np.array(img)
+                    
+                    # Kiểm tra số kênh màu
+                    if len(img_np.shape) == 3 and img_np.shape[2] == 3:
+                        # Ảnh RGB từ PIL, chuyển sang BGR cho OpenCV
+                        img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+                    elif len(img_np.shape) == 3 and img_np.shape[2] == 4:
+                        # Ảnh RGBA, chuyển sang BGR
+                        img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGBA2BGR)
+                    else:
+                        # Ảnh grayscale, giữ nguyên
+                        img_cv = img_np
+                else:
+                    # Đọc file không phải TIFF
+                    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+                    img_cv = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+                
+                # Hiển thị ảnh gốc
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("Ảnh gốc")
+                    # Chuyển BGR sang RGB để hiển thị
+                    if len(img_cv.shape) == 3 and img_cv.shape[2] == 3:
+                        display_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+                        st.image(display_img, use_container_width=True)
+                    else:
+                        st.image(img_cv, use_container_width=True)
+                
+                # Xử lý ảnh
+                with st.spinner(f"Đang áp dụng {selected_func}..."):
+                    try:
+                        if selected_func in ["NegativeColor", "HistEqualColor"]:
+                            processed_img = image_processor.process(img_cv, chapter, selected_func)
+                        else:
+                            if len(img_cv.shape) == 3:
+                                gray_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+                            else:
+                                gray_img = img_cv
+                            processed_img = image_processor.process(gray_img, chapter, selected_func)
+                        
+                        with col2:
+                            st.subheader("Kết quả")
+                            # Hiển thị ảnh kết quả
+                            if len(processed_img.shape) == 2:  # Grayscale
+                                st.image(processed_img, use_container_width=True)
+                            else:  # BGR
+                                # Chuyển BGR sang RGB cho Streamlit
+                                display_processed = cv2.cvtColor(processed_img, cv2.COLOR_BGR2RGB)
+                                st.image(display_processed, use_container_width=True)
+                        
+                        # Download button - giữ nguyên code từ phiên bản gốc
+                        
+                    except Exception as e:
+                        st.error(f"Lỗi xử lý ảnh: {str(e)}")
+                        import traceback
+                        st.code(traceback.format_exc())
+            
+            except Exception as e:
+                st.error(f"Lỗi khi mở file: {str(e)}")

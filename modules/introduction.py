@@ -94,6 +94,3 @@ def show():
     st.markdown("### 👨‍💻 Thông tin tác giả")
     st.info("**Sinh viên:** Lê Hồng Phúc - **MSSV:** 22110399")
     
-    # Add GitHub link
-    st.markdown("### 🔗 Liên kết")
-    st.markdown("[GitHub Repository](https://github.com/LHP-DIPR-Streamlit) | [Tài liệu](https://github.com/LHP-DIPR-Streamlit)")
